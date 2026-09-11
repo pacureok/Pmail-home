@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pmail - Superhuman Email Client</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class'
+    };
+  </script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased select-none overflow-hidden h-screen flex flex-col">
+
+  <!-- BARRA DE TÍTULO FRAMELESS PERSONALIZADA -->
+  <header class="titlebar flex items-center justify-between px-4 h-10 bg-slate-900/80 backdrop-blur border-b border-slate-800 text-xs">
+    <div class="flex items-center gap-2 drag-region">
+      <div class="w-3 h-3 rounded-full bg-indigo-500 shadow-sm shadow-indigo-500/50"></div>
+      <span class="font-semibold tracking-wider text-slate-200">PMAIL</span>
+      <span class="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-indigo-400 border border-slate-700">Desktop v1.0</span>
+      <span id="network-badge" class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Online
+      </span>
+    </div>
+
+    <!-- Barra de Búsqueda y Comando Rápido (Ctrl+K) -->
+    <div class="flex-1 max-w-md mx-6 no-drag">
+      <button id="btn-command-palette" class="w-full flex items-center justify-between px-3 py-1.5 rounded-lg bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 text-slate-400 hover:text-slate-200 transition-all text-xs">
+        <div class="flex items-center gap-2">
+          <i data-lucide="search" class="w-3.5 h-3.5"></i>
+          <span>Buscar correos, comandos o contactos...</span>
+        </div>
+        <kbd class="px-1.5 py-0.5 rounded bg-slate-900 text-[10px] font-mono border border-slate-700">Ctrl+K</kbd>
+      </button>
+    </div>
+
+    <!-- Controles de Ventana Nativa -->
+    <div class="flex items-center no-drag">
+      <button id="btn-theme-toggle" class="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition mr-2" title="Cambiar tema">
+        <i data-lucide="moon" class="w-4 h-4"></i>
+      </button>
+      <button id="btn-minimize" class="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition" title="Minimizar">
+        <i data-lucide="minus" class="w-3.5 h-3.5"></i>
+      </button>
+      <button id="btn-maximize" class="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition" title="Maximizar">
+        <i data-lucide="square" class="w-3.5 h-3.5"></i>
+      </button>
+      <button id="btn-close" class="p-1.5 rounded hover:bg-rose-600/80 text-slate-400 hover:text-white transition" title="Cerrar">
+        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- CONTENEDOR PRINCIPAL DE 3 COLUMNAS + SIDEBAR LATERAL -->
+  <div class="flex-1 flex overflow-hidden">
+
+    <!-- 1. BARRA DE NAVEGACIÓN Y CARPETAS -->
+    <aside class="w-64 bg-slate-900/50 backdrop-blur flex flex-col border-r border-slate-800/80">
+      <!-- Selector de Cuenta @pac.p / @pacur.p -->
+      <div class="p-3 border-b border-slate-800/80">
+        <div class="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 border border-slate-700/50">
+          <div class="flex items-center gap-2.5 overflow-hidden">
+            <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-bold text-white text-sm shadow-md shadow-indigo-500/30">
+              P
+            </div>
+            <div class="truncate">
+              <p class="font-medium text-xs text-slate-200 truncate" id="current-account-name">Administración PAC</p>
+              <p class="text-[11px] text-indigo-400 truncate" id="current-account-email">admin@pac.p</p>
+            </div>
+          </div>
+          <select id="account-selector" class="opacity-0 absolute inset-0 cursor-pointer">
+            <option value="admin@pac.p">admin@pac.p</option>
+            <option value="operaciones@pacur.p">operaciones@pacur.p</option>
+            <option value="soporte@pac.p">soporte@pac.p</option>
+          </select>
+          <i data-lucide="chevrons-up-down" class="w-4 h-4 text-slate-400 shrink-0"></i>
+        </div>
+
+        <!-- Botón de Redactar Superhuman Style -->
+        <button id="btn-compose" class="w-full mt-3 flex items-center justify-between px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs shadow-lg shadow-indigo-600/20 transition-all">
+          <div class="flex items-center gap-2">
+            <i data-lucide="square-pen" class="w-4 h-4"></i>
+            <span>Redactar Correo</span>
+          </div>
+          <kbd class="px-1.5 py-0.5 rounded bg-indigo-700/50 text-[10px] font-mono">C</kbd>
+        </button>
+      </div>
+
+      <!-- Carpetas y Bandejas -->
+      <nav class="flex-1 overflow-y-auto px-2 py-3 space-y-0.5 text-xs">
+        <button class="nav-folder active w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-200 bg-slate-800/80 font-medium" data-folder="inbox">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="inbox" class="w-4 h-4 text-indigo-400"></i>
+            <span>Bandeja de Entrada</span>
+          </div>
+          <span id="badge-inbox" class="px-1.5 py-0.2 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-semibold">0</span>
+        </button>
+
+        <button class="nav-folder w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/40" data-folder="outbox">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="send-to-back" class="w-4 h-4 text-amber-400"></i>
+            <span>Cola de Salida (Outbox)</span>
+          </div>
+          <span id="badge-outbox" class="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[10px]">0</span>
+        </button>
+
+        <button class="nav-folder w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/40" data-folder="sent">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="send" class="w-4 h-4 text-emerald-400"></i>
+            <span>Enviados</span>
+          </div>
+        </button>
+
+        <button class="nav-folder w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/40" data-folder="drafts">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="file-edit" class="w-4 h-4 text-sky-400"></i>
+            <span>Borradores</span>
+          </div>
+          <span id="badge-drafts" class="px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-400 text-[10px]">0</span>
+        </button>
+
+        <div class="pt-3 pb-1 px-3 text-[10px] uppercase font-semibold tracking-wider text-slate-500">Nube y Seguridad</div>
+
+        <button id="btn-force-sync" class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/40">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="cloud" class="w-4 h-4 text-blue-400"></i>
+            <span>Google Drive / TeraBox</span>
+          </div>
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-slate-500"></i>
+        </button>
+      </nav>
+
+      <!-- Resumen de Estado Offline / Nube -->
+      <div class="p-3 border-t border-slate-800/80 bg-slate-900/30 text-[11px] space-y-1.5">
+        <div class="flex items-center justify-between text-slate-400">
+          <span class="flex items-center gap-1.5">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5 text-indigo-400"></i> Cifrado AES-256
+          </span>
+          <span class="text-emerald-400 text-[10px]">Activo</span>
+        </div>
+        <div class="flex items-center justify-between text-slate-400">
+          <span class="flex items-center gap-1.5">
+            <i data-lucide="server" class="w-3.5 h-3.5 text-indigo-400"></i> SMTP :2525
+          </span>
+          <span class="text-indigo-400 text-[10px]">@pac.p / @pacur.p</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 2. BANDEJA DE ENTRADA / LISTA DE CORREOS -->
+    <section class="w-80 lg:w-96 bg-slate-900/20 flex flex-col border-r border-slate-800/80">
+      <!-- Pestañas de Vista Rápida -->
+      <div class="flex items-center justify-between px-3 py-2.5 border-b border-slate-800/80 text-xs">
+        <div class="flex gap-1 bg-slate-800/60 p-1 rounded-lg">
+          <button class="tab-btn active px-3 py-1 rounded-md font-medium text-slate-200 bg-slate-700/80" data-filter="all">Todos</button>
+          <button class="tab-btn px-3 py-1 rounded-md text-slate-400 hover:text-slate-200" data-filter="unread">No leídos</button>
+          <button class="tab-btn px-3 py-1 rounded-md text-slate-400 hover:text-slate-200" data-filter="pending">Pendientes</button>
+        </div>
+        <span class="text-slate-500 text-[11px]" id="email-count-label">0 correos</span>
+      </div>
+
+      <!-- Lista Scrollable de Correos -->
+      <div id="email-list" class="flex-1 overflow-y-auto divide-y divide-slate-800/40">
+        <!-- Rellenado dinámicamente mediante app.js -->
+      </div>
+    </section>
+
+    <!-- 3. PANEL DE LECTURA Y DETALLES DEL CORREO -->
+    <main class="flex-1 bg-slate-950 flex flex-col overflow-hidden">
+      <div id="empty-state" class="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500">
+        <div class="w-16 h-16 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-center mb-4">
+          <i data-lucide="mail-open" class="w-8 h-8 text-indigo-400/60"></i>
+        </div>
+        <h3 class="text-base font-semibold text-slate-300 mb-1">Bandeja Unificada Pmail</h3>
+        <p class="text-xs max-w-sm text-slate-400 mb-4">Selecciona un correo para leerlo o pulsa <kbd class="px-1.5 py-0.5 rounded bg-slate-800 font-mono text-[10px] text-slate-300 border border-slate-700">C</kbd> para redactar uno nuevo con dominios @pac.p y @pacur.p.</p>
+        <div class="flex items-center gap-2 text-[11px] text-slate-500">
+          <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 font-mono">J</kbd> / <kbd class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 font-mono">K</kbd> Navegar</span>
+          <span>•</span>
+          <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 font-mono">E</kbd> Archivar</span>
+        </div>
+      </div>
+
+      <div id="email-view" class="hidden flex-1 flex flex-col overflow-hidden">
+        <!-- Barra de Acciones del Correo -->
+        <div class="flex items-center justify-between px-6 py-3 border-b border-slate-800/80 bg-slate-900/30">
+          <div class="flex items-center gap-2">
+            <button id="btn-reply" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs transition">
+              <i data-lucide="reply" class="w-3.5 h-3.5"></i> Responder
+            </button>
+            <button id="btn-forward" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs transition">
+              <i data-lucide="forward" class="w-3.5 h-3.5"></i> Reenviar
+            </button>
+            <button id="btn-archive" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition" title="Archivar (E)">
+              <i data-lucide="archive" class="w-4 h-4"></i>
+            </button>
+            <button id="btn-delete" class="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition" title="Eliminar">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <div class="flex items-center gap-2">
+            <span id="view-status-badge" class="px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">SYNCED</span>
+          </div>
+        </div>
+
+        <!-- Encabezado del Correo -->
+        <div class="p-6 border-b border-slate-800/60">
+          <h2 id="view-subject" class="text-xl font-bold text-slate-100 mb-4">Asunto del Correo</h2>
+          <div class="flex items-start justify-between">
+            <div class="flex items-center gap-3">
+              <div id="view-avatar" class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-600 to-pink-500 flex items-center justify-center font-bold text-white text-sm">
+                P
+              </div>
+              <div>
+                <p id="view-from" class="text-sm font-semibold text-slate-200">remitente@pac.p</p>
+                <p id="view-to" class="text-xs text-slate-400">para destinatario@pacur.p</p>
+              </div>
+            </div>
+            <time id="view-date" class="text-xs text-slate-500">12:30 PM</time>
+          </div>
+        </div>
+
+        <!-- Cuerpo del Correo -->
+        <div id="view-body" class="flex-1 overflow-y-auto p-6 text-sm text-slate-300 leading-relaxed font-sans prose prose-invert max-w-none">
+          <!-- Contenido renderizado -->
+        </div>
+
+        <!-- Archivos Adjuntos -->
+        <div id="view-attachments-container" class="hidden px-6 py-4 border-t border-slate-800/80 bg-slate-900/30">
+          <h4 class="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1.5">
+            <i data-lucide="paperclip" class="w-3.5 h-3.5"></i> Archivos Adjuntos (<span id="attachments-count">0</span>)
+          </h4>
+          <div id="attachments-list" class="flex flex-wrap gap-2">
+            <!-- Chips de adjuntos -->
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 4. BARRA LATERAL DERECHA (CALENDARIO, TAREAS, CONTACTOS) -->
+    <aside id="widget-sidebar" class="w-72 bg-slate-900/60 backdrop-blur border-l border-slate-800/80 flex flex-col transition-all">
+      <!-- Selector de Widget -->
+      <div class="flex items-center justify-around p-2 border-b border-slate-800/80 text-xs">
+        <button class="widget-tab active p-2 rounded-lg text-indigo-400 bg-slate-800" data-widget="calendar" title="Calendario">
+          <i data-lucide="calendar" class="w-4 h-4"></i>
+        </button>
+        <button class="widget-tab p-2 rounded-lg text-slate-400 hover:text-slate-200" data-widget="tasks" title="Tareas">
+          <i data-lucide="check-square" class="w-4 h-4"></i>
+        </button>
+        <button class="widget-tab p-2 rounded-lg text-slate-400 hover:text-slate-200" data-widget="contacts" title="Contactos @pac.p">
+          <i data-lucide="users" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- Contenido de Widget: CALENDARIO -->
+      <div id="widget-calendar" class="flex-1 p-3 overflow-y-auto space-y-4">
+        <div class="flex items-center justify-between">
+          <span id="calendar-month-label" class="text-xs font-semibold text-slate-200">Septiembre 2026</span>
+          <span class="text-[10px] text-indigo-400 px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20">Hoy</span>
+        </div>
+        <!-- Grid del Mini-Calendario -->
+        <div id="calendar-grid" class="grid grid-cols-7 gap-1 text-center text-[11px] text-slate-400">
+          <!-- Días renderizados dinámicamente -->
+        </div>
+
+        <div class="pt-2 border-t border-slate-800/80">
+          <h5 class="text-[11px] font-semibold text-slate-300 mb-2">Próximos Eventos</h5>
+          <div class="space-y-2 text-xs">
+            <div class="p-2 rounded-lg bg-slate-800/60 border border-slate-700/50">
+              <p class="font-medium text-slate-200">Reunión de Dominio @pac.p</p>
+              <p class="text-[10px] text-slate-400">10:00 AM • Google Meet</p>
+            </div>
+            <div class="p-2 rounded-lg bg-slate-800/60 border border-slate-700/50">
+              <p class="font-medium text-slate-200">Auditoría de Respaldos Nube</p>
+              <p class="text-[10px] text-slate-400">03:30 PM • Google Drive / TeraBox</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Contenido de Widget: TAREAS (TO-DO) -->
+      <div id="widget-tasks" class="hidden flex-1 p-3 flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold text-slate-200">Mis Tareas</span>
+          <span id="tasks-count" class="text-[10px] text-slate-400">3 pendientes</span>
+        </div>
+        <form id="form-add-task" class="flex gap-2 mb-3">
+          <input type="text" id="input-new-task" placeholder="Nueva tarea..." class="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 focus:outline-none focus:border-indigo-500">
+          <button type="submit" class="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          </button>
+        </form>
+        <div id="tasks-list" class="flex-1 overflow-y-auto space-y-2 text-xs">
+          <!-- Tareas dinámicas -->
+        </div>
+      </div>
+
+      <!-- Contenido de Widget: CONTACTOS -->
+      <div id="widget-contacts" class="hidden flex-1 p-3 overflow-y-auto space-y-2">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-semibold text-slate-200">Directorio de Contactos</span>
+          <span class="text-[10px] text-indigo-400">@pac.p / @pacur.p</span>
+        </div>
+        <div id="contacts-list" class="space-y-1.5">
+          <!-- Lista de contactos precargados -->
+        </div>
+      </div>
+    </aside>
+
+  </div>
+
+  <!-- COMPOSITOR FLOTANTE DE CORREO (SUPERHUMAN STYLE CON MARKDOWN Y HTML) -->
+  <div id="composer-modal" class="hidden fixed inset-x-4 bottom-4 md:inset-x-auto md:right-8 md:w-[620px] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col z-50 overflow-hidden">
+    <!-- Header del Compositor -->
+    <div class="flex items-center justify-between px-4 py-2.5 bg-slate-800/80 border-b border-slate-700 text-xs">
+      <span class="font-semibold text-slate-200 flex items-center gap-2">
+        <i data-lucide="send" class="w-3.5 h-3.5 text-indigo-400"></i> Nuevo Mensaje
+      </span>
+      <div class="flex items-center gap-2">
+        <button id="btn-toggle-preview" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 text-[11px] flex items-center gap-1">
+          <i data-lucide="eye" class="w-3 h-3"></i> Vista Previa Markdown
+        </button>
+        <button id="btn-close-composer" class="text-slate-400 hover:text-white">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Campos de Envío -->
+    <div class="p-3 space-y-2 text-xs border-b border-slate-800">
+      <div class="flex items-center gap-2">
+        <span class="text-slate-500 w-12 text-right">De:</span>
+        <select id="composer-from" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-indigo-500">
+          <option value="admin@pac.p">admin@pac.p (Principal)</option>
+          <option value="operaciones@pacur.p">operaciones@pacur.p (Corporativo)</option>
+          <option value="contacto@pac.p">contacto@pac.p</option>
+        </select>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-slate-500 w-12 text-right">Para:</span>
+        <input type="email" id="composer-to" placeholder="destinatario@pacur.p o correo externo..." class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-indigo-500">
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-slate-500 w-12 text-right">Asunto:</span>
+        <input type="text" id="composer-subject" placeholder="Asunto del correo" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-slate-200 font-medium focus:outline-none focus:border-indigo-500">
+      </div>
+    </div>
+
+    <!-- Barra de Formato de Texto -->
+    <div class="flex items-center gap-1 px-3 py-1.5 bg-slate-800/40 border-b border-slate-800 text-slate-400 text-xs">
+      <button type="button" class="format-btn p-1 rounded hover:bg-slate-700" data-format="bold" title="Negrita (**texto**)"><i data-lucide="bold" class="w-3.5 h-3.5"></i></button>
+      <button type="button" class="format-btn p-1 rounded hover:bg-slate-700" data-format="italic" title="Cursiva (*texto*)"><i data-lucide="italic" class="w-3.5 h-3.5"></i></button>
+      <button type="button" class="format-btn p-1 rounded hover:bg-slate-700" data-format="code" title="Código (`código`)"><i data-lucide="code" class="w-3.5 h-3.5"></i></button>
+      <button type="button" class="format-btn p-1 rounded hover:bg-slate-700" data-format="link" title="Enlace"><i data-lucide="link" class="w-3.5 h-3.5"></i></button>
+      <button type="button" class="format-btn p-1 rounded hover:bg-slate-700" data-format="list" title="Lista"><i data-lucide="list" class="w-3.5 h-3.5"></i></button>
+      <div class="h-4 w-px bg-slate-700 mx-1"></div>
+      <label class="p-1 rounded hover:bg-slate-700 cursor-pointer text-slate-400 hover:text-indigo-400" title="Adjuntar Archivo">
+        <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
+        <input type="file" id="composer-attach-input" class="hidden" multiple>
+      </label>
+    </div>
+
+    <!-- Área de Edición y Vista Previa Markdown -->
+    <div class="flex-1 h-52 relative">
+      <textarea id="composer-body" placeholder="Escribe tu mensaje en Markdown o texto plano... Soporta formato rico automático." class="w-full h-full p-3 bg-transparent text-slate-200 text-xs font-mono resize-none focus:outline-none leading-relaxed"></textarea>
+      <div id="composer-preview" class="hidden absolute inset-0 p-3 bg-slate-900 overflow-y-auto text-xs text-slate-200 prose prose-invert max-w-none"></div>
+    </div>
+
+    <!-- Lista de Adjuntos en el Compositor -->
+    <div id="composer-attachments" class="hidden px-3 py-2 border-t border-slate-800 bg-slate-900/60 flex flex-wrap gap-1.5 text-xs">
+      <!-- Chips de archivos adjuntos -->
+    </div>
+
+    <!-- Footer de Acciones -->
+    <div class="flex items-center justify-between p-3 bg-slate-800/80 border-t border-slate-700">
+      <div class="flex items-center gap-2">
+        <button id="btn-save-draft" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-medium transition">
+          Guardar Borrador
+        </button>
+        <span id="composer-status-tip" class="text-[11px] text-slate-400"></span>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btn-submit-send" class="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium shadow-md shadow-indigo-600/30 transition">
+          <i data-lucide="send" class="w-3.5 h-3.5"></i> Enviar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE ATRIBUTOS / PALETA DE COMANDOS (Ctrl+K) -->
+  <div id="command-modal" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-start justify-center pt-24 z-50">
+    <div class="w-full max-w-xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
+      <div class="flex items-center px-4 py-3 border-b border-slate-800">
+        <i data-lucide="search" class="w-4 h-4 text-slate-400 mr-2.5"></i>
+        <input type="text" id="command-input" placeholder="Escribe un comando o busca correo..." class="flex-1 bg-transparent text-sm text-slate-100 focus:outline-none">
+        <kbd class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-slate-400">ESC</kbd>
+      </div>
+      <div class="max-h-72 overflow-y-auto p-2 text-xs space-y-1" id="command-results">
+        <button class="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-indigo-600/20 text-slate-300 hover:text-indigo-300 text-left" data-action="compose">
+          <span class="flex items-center gap-2"><i data-lucide="square-pen" class="w-3.5 h-3.5"></i> Redactar nuevo correo</span>
+          <kbd class="font-mono text-[10px] text-slate-500">C</kbd>
+        </button>
+        <button class="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-indigo-600/20 text-slate-300 hover:text-indigo-300 text-left" data-action="sync">
+          <span class="flex items-center gap-2"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Sincronizar con Google Drive / TeraBox</span>
+          <kbd class="font-mono text-[10px] text-slate-500">Ctrl+S</kbd>
+        </button>
+        <button class="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-indigo-600/20 text-slate-300 hover:text-indigo-300 text-left" data-action="outbox">
+          <span class="flex items-center gap-2"><i data-lucide="send-to-back" class="w-3.5 h-3.5"></i> Ir a Cola de Salida Offline</span>
+        </button>
+        <button class="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-indigo-600/20 text-slate-300 hover:text-indigo-300 text-left" data-action="theme">
+          <span class="flex items-center gap-2"><i data-lucide="sun-moon" class="w-3.5 h-3.5"></i> Alternar Modo Oscuro / Claro</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

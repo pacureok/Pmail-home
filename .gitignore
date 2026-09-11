@@ -1,0 +1,26 @@
+# Dependencias
+node_modules/
+package-lock.json
+
+# Compilaciones de Electron y binarios
+dist/
+build/
+*.exe
+*.dmg
+*.AppImage
+
+# Archivos temporales de bases de datos
+*.db-wal
+*.db-shm
+*test_pmail*
+
+# Archivos de respaldo locales
+data/backups/*.pmailpkg
+data/terabox_sync/Pmail_Backups/*
+
+# Logs y SO
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

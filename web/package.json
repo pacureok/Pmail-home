@@ -1,0 +1,11 @@
+{
+  "name": "pmail-web",
+  "version": "1.0.0",
+  "description": "Pmail Web & Cloud Client for @pac.p and @pacur.p domains",
+  "main": "serve.js",
+  "scripts": {
+    "start": "node serve.js"
+  },
+  "author": "Pmail Team",
+  "license": "MIT"
+}
