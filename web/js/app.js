@@ -1,24 +1,25 @@
 /**
- * Pmail Web Client - Main Application Controller
- * Integración completa: Autenticación Gmail-Style, GitHub Cloud Sync, IndexedDB y LAN Host
+ * Pmail Web Client - Main Application Controller (Google Drive Folder-Centric)
+ * Autenticación con Google OAuth2, Validación de Carpeta Drive y Sincronización Autónoma
  */
 (function () {
   const db = new window.PmailWebDatabase();
   const lan = new window.PmailLanConnector();
   const backup = new window.PmailBackupReader();
-  const auth = new window.PmailAuth();
-  const github = new window.PmailGitHubSync();
+  const gdrive = new window.PmailGoogleDriveSync();
 
   const state = {
     currentUser: null,
+    googleUser: null,
+    folderInfo: null,
     currentFolder: 'inbox',
     currentFilter: 'all',
     selectedEmailId: null,
     emails: [],
     tasks: [
-      { id: 1, text: 'Configurar cuenta @pac.p o @pacur.p', done: true },
-      { id: 2, text: 'Vincular token de GitHub para respaldo privado', done: false },
-      { id: 3, text: 'Probar envío de correo offline con IndexedDB', done: false }
+      { id: 1, text: 'Vincular carpeta de Google Drive', done: true },
+      { id: 2, text: 'Configurar dirección @pac.p o @pacur.p', done: true },
+      { id: 3, text: 'Probar respaldo autónomo en Google Drive', done: false }
     ],
     contacts: [
       { name: 'Soporte PAC', email: 'soporte@pacur.p' },
@@ -28,23 +29,30 @@
     ]
   };
 
+  let silentSyncTimeout = null;
+
   const dom = {
-    // Auth Modal
+    // Auth Modal (Google Drive)
     authModal: document.getElementById('auth-modal'),
-    authTabLogin: document.getElementById('auth-tab-login'),
-    authTabRegister: document.getElementById('auth-tab-register'),
-    formLogin: document.getElementById('form-login'),
-    formRegister: document.getElementById('form-register'),
-    loginIdentifier: document.getElementById('login-identifier'),
-    loginPassword: document.getElementById('login-password'),
-    loginErrorMsg: document.getElementById('login-error-msg'),
-    regFullname: document.getElementById('reg-fullname'),
-    regUsername: document.getElementById('reg-username'),
-    regDomain: document.getElementById('reg-domain'),
-    regPreviewEmail: document.getElementById('reg-preview-email'),
-    regPassword: document.getElementById('reg-password'),
-    regConfirmPassword: document.getElementById('reg-confirm-password'),
-    regErrorMsg: document.getElementById('reg-error-msg'),
+    formGoogleAuth: document.getElementById('form-google-auth'),
+    btnLoginGoogle: document.getElementById('btn-login-google'),
+    googleAuthStatusBadge: document.getElementById('google-auth-status-badge'),
+    googleProfilePreview: document.getElementById('google-profile-preview'),
+    googleProfileImg: document.getElementById('google-profile-img'),
+    googleProfileName: document.getElementById('google-profile-name'),
+    googleProfileEmail: document.getElementById('google-profile-email'),
+    btnToggleManualToken: document.getElementById('btn-toggle-manual-token'),
+    manualTokenContainer: document.getElementById('manual-token-container'),
+    inputCustomClientId: document.getElementById('input-custom-client-id'),
+    inputManualToken: document.getElementById('input-manual-token'),
+    btnApplyManualToken: document.getElementById('btn-apply-manual-token'),
+    inputPmailUsername: document.getElementById('input-pmail-username'),
+    selectPmailDomain: document.getElementById('select-pmail-domain'),
+    previewActivePmailEmail: document.getElementById('preview-active-pmail-email'),
+    inputGdriveFolderUrl: document.getElementById('input-gdrive-folder-url'),
+    authErrorMsg: document.getElementById('auth-error-msg'),
+    authSuccessMsg: document.getElementById('auth-success-msg'),
+    btnSubmitValidateEnter: document.getElementById('btn-submit-validate-enter'),
 
     // Perfil y Header
     btnUserProfile: document.getElementById('btn-user-profile'),
@@ -53,33 +61,29 @@
     dropdownAvatar: document.getElementById('dropdown-avatar'),
     dropdownUserName: document.getElementById('dropdown-user-name'),
     dropdownUserEmail: document.getElementById('dropdown-user-email'),
-    dropdownBtnGithub: document.getElementById('dropdown-btn-github'),
-    dropdownGithubStatus: document.getElementById('dropdown-github-status'),
+    dropdownBtnGdrive: document.getElementById('dropdown-btn-gdrive'),
+    dropdownGdriveStatus: document.getElementById('dropdown-gdrive-status'),
     dropdownBtnSwitchAccount: document.getElementById('dropdown-btn-switch-account'),
     btnLogout: document.getElementById('btn-logout'),
+
+    // Google Drive Modal
+    gdriveModal: document.getElementById('gdrive-modal'),
+    btnOpenGdrive: document.getElementById('btn-open-gdrive'),
+    btnCloseGdrive: document.getElementById('btn-close-gdrive'),
+    gdriveHeaderLabel: document.getElementById('gdrive-header-label'),
+    modalGdriveFolderName: document.getElementById('modal-gdrive-folder-name'),
+    modalGdriveFolderId: document.getElementById('modal-gdrive-folder-id'),
+    btnOpenGdriveFolderWeb: document.getElementById('btn-open-gdrive-folder-web'),
+    btnModalSyncGdrive: document.getElementById('btn-modal-sync-gdrive'),
+    btnModalRestoreGdrive: document.getElementById('btn-modal-restore-gdrive'),
+    modalGdriveStatusMsg: document.getElementById('modal-gdrive-status-msg'),
 
     // Sidebar Cuenta
     sidebarAvatar: document.getElementById('sidebar-avatar'),
     currentAccountName: document.getElementById('current-account-name'),
     currentAccountEmail: document.getElementById('current-account-email'),
-    sidebarBtnSyncGithub: document.getElementById('sidebar-btn-sync-github'),
-    githubSyncSpinner: document.getElementById('github-sync-spinner'),
-
-    // GitHub Modal
-    githubModal: document.getElementById('github-modal'),
-    btnOpenGithub: document.getElementById('btn-open-github'),
-    btnCloseGithub: document.getElementById('btn-close-github'),
-    githubHeaderLabel: document.getElementById('github-header-label'),
-    githubAccountCard: document.getElementById('github-account-card'),
-    githubAvatarImg: document.getElementById('github-avatar-img'),
-    githubUserName: document.getElementById('github-user-name'),
-    githubUserLink: document.getElementById('github-user-link'),
-    btnUnlinkGithub: document.getElementById('btn-unlink-github'),
-    githubTokenInput: document.getElementById('github-token-input'),
-    btnSaveGithubToken: document.getElementById('btn-save-github-token'),
-    btnSyncNowGithub: document.getElementById('btn-sync-now-github'),
-    btnRestoreGithub: document.getElementById('btn-restore-github'),
-    githubSyncStatusMsg: document.getElementById('github-sync-status-msg'),
+    sidebarBtnSyncGdrive: document.getElementById('sidebar-btn-sync-gdrive'),
+    gdriveSyncSpinner: document.getElementById('gdrive-sync-spinner'),
 
     // Vistas y Bandejas
     emailList: document.getElementById('email-list'),
@@ -147,136 +151,253 @@
     renderContacts();
     setupEventListeners();
     setupShortcuts();
-    setupAuthListeners();
-    setupGitHubListeners();
+    setupGoogleDriveListeners();
 
     if (window.lucide) window.lucide.createIcons();
 
-    // 1. Verificar autenticación de usuario
-    const user = auth.getCurrentUser();
-    if (!user) {
-      showAuthModal('register');
+    // 1. Verificar autenticación de Google Drive
+    const savedProfile = gdrive.getSavedProfile();
+    if (gdrive.isAuthenticated() && savedProfile) {
+      applyUserProfile(savedProfile);
+      updateDriveUI(true);
+      hideAuthModal();
+      // Restauración en background si es necesario
+      checkAndRestoreFromDrive();
     } else {
-      applyUserProfile(user);
+      showAuthModal();
     }
 
     // 2. Cargar datos locales de IndexedDB
     await loadInitialData();
 
-    // 3. Conectar LAN
+    // 3. Conectar LAN con PC Host
     lan.on(handleLanEvents);
     lan.startAutoSync(6000);
     await checkLanSync();
-
-    // 4. Actualizar estado de GitHub
-    updateGitHubStatusUI();
   }
 
   // ==========================================
-  // AUTENTICACIÓN Y PERFIL DE USUARIO
+  // GOOGLE DRIVE AUTH & FOLDER SETUP
   // ==========================================
-  function showAuthModal(mode = 'login') {
+  function showAuthModal() {
     dom.authModal.classList.remove('hidden');
-    switchAuthTab(mode);
+    dom.authErrorMsg.classList.add('hidden');
+    dom.authSuccessMsg.classList.add('hidden');
+    updatePmailEmailPreview();
   }
 
   function hideAuthModal() {
     dom.authModal.classList.add('hidden');
   }
 
-  function switchAuthTab(mode) {
-    if (mode === 'login') {
-      dom.authTabLogin.className = 'flex-1 py-2 rounded-lg text-slate-200 bg-slate-700/80 shadow-sm transition';
-      dom.authTabRegister.className = 'flex-1 py-2 rounded-lg text-slate-400 hover:text-slate-200 transition';
-      dom.formLogin.classList.remove('hidden');
-      dom.formRegister.classList.add('hidden');
-      dom.loginIdentifier.focus();
-    } else {
-      dom.authTabRegister.className = 'flex-1 py-2 rounded-lg text-slate-200 bg-slate-700/80 shadow-sm transition';
-      dom.authTabLogin.className = 'flex-1 py-2 rounded-lg text-slate-400 hover:text-slate-200 transition';
-      dom.formRegister.classList.remove('hidden');
-      dom.formLogin.classList.add('hidden');
-      dom.regFullname.focus();
-    }
+  function updatePmailEmailPreview() {
+    const u = dom.inputPmailUsername.value.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'usuario';
+    const d = dom.selectPmailDomain.value;
+    dom.previewActivePmailEmail.textContent = `${u}${d}`;
   }
 
-  function applyUserProfile(user) {
-    state.currentUser = user;
-    const initial = (user.fullName ? user.fullName[0] : user.username[0] || 'P').toUpperCase();
+  function applyUserProfile(profile) {
+    state.currentUser = profile;
+    const initial = (profile.pmailEmail ? profile.pmailEmail[0] : 'P').toUpperCase();
 
     // Header y Avatar
-    dom.userAvatarBadge.textContent = initial;
-    dom.dropdownAvatar.textContent = initial;
-    dom.dropdownUserName.textContent = user.fullName || user.username;
-    dom.dropdownUserEmail.textContent = user.email;
+    if (profile.googlePicture) {
+      dom.userAvatarBadge.innerHTML = `<img src="${profile.googlePicture}" class="w-full h-full object-cover">`;
+      dom.dropdownAvatar.innerHTML = `<img src="${profile.googlePicture}" class="w-full h-full object-cover">`;
+      dom.sidebarAvatar.innerHTML = `<img src="${profile.googlePicture}" class="w-full h-full object-cover">`;
+    } else {
+      dom.userAvatarBadge.textContent = initial;
+      dom.dropdownAvatar.textContent = initial;
+      dom.sidebarAvatar.textContent = initial;
+    }
+
+    dom.dropdownUserName.textContent = profile.googleName || profile.pmailEmail;
+    dom.dropdownUserEmail.textContent = profile.pmailEmail;
 
     // Sidebar
-    dom.sidebarAvatar.textContent = initial;
-    dom.currentAccountName.textContent = user.fullName || user.username;
-    dom.currentAccountEmail.textContent = user.email;
+    dom.currentAccountName.textContent = profile.googleName || profile.pmailEmail;
+    dom.currentAccountEmail.textContent = profile.pmailEmail;
 
     // Actualizar selector del compositor
     dom.composerFrom.innerHTML = `
-      <option value="${user.email}">${user.email} (Mi Cuenta Activa)</option>
-      <option value="${user.username}${user.domain === '@pac.p' ? '@pacur.p' : '@pac.p'}">Alias ${user.domain === '@pac.p' ? '@pacur.p' : '@pac.p'}</option>
+      <option value="${profile.pmailEmail}">${profile.pmailEmail} (Principal Drive)</option>
     `;
   }
 
-  function setupAuthListeners() {
-    dom.authTabLogin.addEventListener('click', () => switchAuthTab('login'));
-    dom.authTabRegister.addEventListener('click', () => switchAuthTab('register'));
+  function updateDriveUI(connected) {
+    if (connected && gdrive.folderId) {
+      dom.gdriveHeaderLabel.textContent = 'Drive: Activo';
+      dom.dropdownGdriveStatus.textContent = 'Conectada';
+      dom.dropdownGdriveStatus.className = 'text-[10px] text-emerald-400 font-medium';
 
-    // Previsualización dinámica de email en registro
-    const updatePreview = () => {
-      const u = dom.regUsername.value.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
-      const d = dom.regDomain.value;
-      dom.regPreviewEmail.textContent = u ? `${u}${d}` : `${d}`;
-    };
-    dom.regUsername.addEventListener('input', updatePreview);
-    dom.regDomain.addEventListener('change', updatePreview);
+      dom.modalGdriveFolderId.textContent = `ID: ${gdrive.folderId}`;
+      dom.btnOpenGdriveFolderWeb.href = `https://drive.google.com/drive/folders/${gdrive.folderId}`;
+    } else {
+      dom.gdriveHeaderLabel.textContent = 'Google Drive';
+      dom.dropdownGdriveStatus.textContent = 'Desconectado';
+      dom.dropdownGdriveStatus.className = 'text-[10px] text-slate-500 font-medium';
+    }
+  }
 
-    // Registro
-    dom.formRegister.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      dom.regErrorMsg.classList.add('hidden');
+  function setupGoogleDriveListeners() {
+    dom.inputPmailUsername.addEventListener('input', updatePmailEmailPreview);
+    dom.selectPmailDomain.addEventListener('change', updatePmailEmailPreview);
 
-      const pass = dom.regPassword.value;
-      const confirmPass = dom.regConfirmPassword.value;
-      if (pass !== confirmPass) {
-        dom.regErrorMsg.textContent = 'Las contraseñas no coinciden.';
-        dom.regErrorMsg.classList.remove('hidden');
-        return;
+    // Toggle para Client ID manual o token
+    dom.btnToggleManualToken.addEventListener('click', () => {
+      dom.manualTokenContainer.classList.toggle('hidden');
+    });
+
+    // Aplicar token manual / Client ID
+    dom.btnApplyManualToken.addEventListener('click', async () => {
+      const customClientId = dom.inputCustomClientId.value.trim();
+      const manualToken = dom.inputManualToken.value.trim();
+
+      if (customClientId) {
+        gdrive.setClientId(customClientId);
       }
 
-      try {
-        const user = await auth.register({
-          fullName: dom.regFullname.value,
-          username: dom.regUsername.value,
-          domain: dom.regDomain.value,
-          password: pass
-        });
-
-        applyUserProfile(user);
-        hideAuthModal();
-        alert(`¡Bienvenido a Pmail! Tu cuenta ${user.email} ha sido creada y activada.`);
-      } catch (err) {
-        dom.regErrorMsg.textContent = err.message;
-        dom.regErrorMsg.classList.remove('hidden');
+      if (manualToken) {
+        gdrive.saveToken(manualToken);
+        try {
+          const user = await gdrive.fetchGoogleUserInfo(manualToken);
+          onGoogleAuthSuccess(user, manualToken);
+        } catch (err) {
+          alert('Error con el token ingresado: ' + err.message);
+        }
       }
     });
 
-    // Login
-    dom.formLogin.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      dom.loginErrorMsg.classList.add('hidden');
+    // Iniciar OAuth con Google Identity Services
+    dom.btnLoginGoogle.addEventListener('click', async () => {
+      dom.btnLoginGoogle.disabled = true;
+      dom.btnLoginGoogle.innerText = 'Conectando con Google...';
+      dom.authErrorMsg.classList.add('hidden');
 
       try {
-        const user = await auth.login(dom.loginIdentifier.value, dom.loginPassword.value);
-        applyUserProfile(user);
-        hideAuthModal();
+        const token = await gdrive.requestGoogleToken();
+        const user = await gdrive.fetchGoogleUserInfo(token);
+        onGoogleAuthSuccess(user, token);
       } catch (err) {
-        dom.loginErrorMsg.textContent = err.message;
-        dom.loginErrorMsg.classList.remove('hidden');
+        console.warn('Error en Google Auth:', err);
+        dom.authErrorMsg.textContent = err.message || 'Error al autorizar con Google.';
+        dom.authErrorMsg.classList.remove('hidden');
+      } finally {
+        dom.btnLoginGoogle.disabled = false;
+        dom.btnLoginGoogle.innerHTML = `
+          <svg class="w-4 h-4 mr-2" viewBox="0 0 24 24">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          <span>Acceder con mi Cuenta de Google</span>
+        `;
+      }
+    });
+
+    function onGoogleAuthSuccess(user, token) {
+      state.googleUser = user;
+      dom.googleAuthStatusBadge.className = 'text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium';
+      dom.googleAuthStatusBadge.textContent = 'Conectado';
+
+      dom.googleProfilePreview.classList.remove('hidden');
+      dom.googleProfileImg.src = user.picture || 'https://cdn-icons-png.flaticon.com/512/561/561127.png';
+      dom.googleProfileName.textContent = user.name;
+      dom.googleProfileEmail.textContent = user.email;
+
+      // Autocompletar nombre de usuario si está vacío
+      if (!dom.inputPmailUsername.value) {
+        const suggested = user.email.split('@')[0].replace(/[^a-z0-9._-]/g, '');
+        dom.inputPmailUsername.value = suggested;
+        updatePmailEmailPreview();
+      }
+    }
+
+    // Validación de Carpeta e Ingreso
+    dom.formGoogleAuth.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      dom.authErrorMsg.classList.add('hidden');
+      dom.authSuccessMsg.classList.add('hidden');
+
+      if (!gdrive.accessToken) {
+        dom.authErrorMsg.textContent = 'Debes conectarte con tu cuenta de Google primero.';
+        dom.authErrorMsg.classList.remove('hidden');
+        return;
+      }
+
+      const folderUrlInput = dom.inputGdriveFolderUrl.value.trim();
+      const username = dom.inputPmailUsername.value.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
+      const domain = dom.selectPmailDomain.value;
+      const pmailEmail = `${username}${domain}`;
+
+      dom.btnSubmitValidateEnter.disabled = true;
+      dom.btnSubmitValidateEnter.innerHTML = '<span class="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin mr-2"></span> Validando carpeta y archivos...';
+
+      try {
+        // 1. Validar existencia y permisos en Google Drive
+        const folderData = await gdrive.validateFolder(folderUrlInput);
+        dom.modalGdriveFolderName.textContent = folderData.name;
+
+        // 2. Comprobar si ya existen pmail_account.json y pmail_data_backup.json en la carpeta
+        const { accountFile, dataFile } = await gdrive.findPmailFilesInFolder();
+
+        let profileData = {
+          pmailEmail,
+          googleEmail: state.googleUser?.email || '',
+          googleName: state.googleUser?.name || username,
+          googlePicture: state.googleUser?.picture || '',
+          folderId: folderData.id,
+          folderName: folderData.name,
+          domain,
+          createdAt: Date.now()
+        };
+
+        if (accountFile) {
+          // Restaurar perfil existente desde Google Drive
+          const remoteAccount = await gdrive.downloadJsonFile(accountFile.id);
+          if (remoteAccount && remoteAccount.pmailEmail) {
+            profileData = { ...profileData, ...remoteAccount };
+          }
+        }
+
+        if (dataFile) {
+          // Restaurar datos existentes en la carpeta
+          const remoteData = await gdrive.downloadJsonFile(dataFile.id);
+          if (remoteData) {
+            if (remoteData.emails) await db.saveEmailsBatch(remoteData.emails);
+            if (remoteData.tasks) state.tasks = remoteData.tasks;
+            if (remoteData.contacts) state.contacts = remoteData.contacts;
+          }
+        }
+
+        // Guardar o actualizar archivos autónomamente en la carpeta de Drive
+        await gdrive.syncAllToDrive(profileData, {
+          emails: state.emails,
+          tasks: state.tasks,
+          contacts: state.contacts,
+          lastSync: new Date().toISOString()
+        });
+
+        // Guardar perfil en sesión local
+        localStorage.setItem(gdrive.STORAGE_KEY_PROFILE, JSON.stringify(profileData));
+        applyUserProfile(profileData);
+        updateDriveUI(true);
+
+        dom.authSuccessMsg.textContent = `✔ Carpeta "${folderData.name}" validada con éxito. Sesión iniciada.`;
+        dom.authSuccessMsg.classList.remove('hidden');
+
+        setTimeout(async () => {
+          hideAuthModal();
+          await refreshAllData();
+        }, 900);
+      } catch (err) {
+        dom.authErrorMsg.textContent = err.message;
+        dom.authErrorMsg.classList.remove('hidden');
+      } finally {
+        dom.btnSubmitValidateEnter.disabled = false;
+        dom.btnSubmitValidateEnter.innerHTML = '<i data-lucide="check-circle" class="w-4 h-4 mr-2"></i> Validar Carpeta e Ingresar a Pmail';
+        if (window.lucide) window.lucide.createIcons();
       }
     });
 
@@ -292,162 +413,142 @@
       }
     });
 
+    // Modales de Drive
+    const openDriveModal = () => {
+      dom.gdriveModal.classList.remove('hidden');
+      dom.userDropdown.classList.add('hidden');
+      dom.modalGdriveStatusMsg.textContent = '';
+      updateDriveUI(gdrive.isAuthenticated());
+    };
+
+    dom.btnOpenGdrive.addEventListener('click', openDriveModal);
+    dom.dropdownBtnGdrive.addEventListener('click', openDriveModal);
+    dom.btnCloseGdrive.addEventListener('click', () => dom.gdriveModal.classList.add('hidden'));
+
     dom.dropdownBtnSwitchAccount.addEventListener('click', () => {
       dom.userDropdown.classList.add('hidden');
-      showAuthModal('login');
+      showAuthModal();
     });
 
     dom.btnLogout.addEventListener('click', () => {
-      dom.userDropdown.classList.add('hidden');
-      auth.logout();
-      showAuthModal('login');
-    });
-  }
-
-  // ==========================================
-  // GITHUB CLOUD SYNC & GISTS
-  // ==========================================
-  function updateGitHubStatusUI() {
-    const isLinked = github.isLinked();
-    const user = github.getSavedGitHubUser();
-
-    if (isLinked && user) {
-      dom.githubHeaderLabel.textContent = `@${user.login}`;
-      dom.dropdownGithubStatus.textContent = `@${user.login}`;
-      dom.dropdownGithubStatus.className = 'text-[10px] text-emerald-400 font-mono';
-
-      dom.githubAccountCard.classList.remove('hidden');
-      dom.githubAvatarImg.src = user.avatarUrl || 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png';
-      dom.githubUserName.textContent = user.name || user.login;
-      dom.githubUserLink.href = user.htmlUrl || `https://github.com/${user.login}`;
-      dom.githubUserLink.textContent = `@${user.login} en GitHub`;
-
-      dom.githubTokenInput.value = '••••••••••••••••••••••••••••••••';
-      dom.githubTokenInput.disabled = true;
-      dom.btnSaveGithubToken.textContent = 'Actualizar';
-    } else {
-      dom.githubHeaderLabel.textContent = 'GitHub Cloud';
-      dom.dropdownGithubStatus.textContent = 'Desconectado';
-      dom.dropdownGithubStatus.className = 'text-[10px] text-slate-500';
-
-      dom.githubAccountCard.classList.add('hidden');
-      dom.githubTokenInput.value = '';
-      dom.githubTokenInput.disabled = false;
-      dom.btnSaveGithubToken.textContent = 'Vincular';
-    }
-  }
-
-  function setupGitHubListeners() {
-    const openGhModal = () => {
-      dom.githubModal.classList.remove('hidden');
-      dom.userDropdown.classList.add('hidden');
-      dom.githubSyncStatusMsg.textContent = '';
-      updateGitHubStatusUI();
-    };
-
-    dom.btnOpenGithub.addEventListener('click', openGhModal);
-    dom.dropdownBtnGithub.addEventListener('click', openGhModal);
-    dom.sidebarBtnSyncGithub.addEventListener('click', () => {
-      if (!github.isLinked()) {
-        openGhModal();
-      } else {
-        triggerGitHubSync();
+      if (confirm('¿Cerrar sesión de Pmail y desvincular carpeta de Drive localmente?')) {
+        dom.userDropdown.classList.add('hidden');
+        gdrive.clearSession();
+        updateDriveUI(false);
+        showAuthModal();
       }
     });
 
-    dom.btnCloseGithub.addEventListener('click', () => dom.githubModal.classList.add('hidden'));
+    // Botones de sincronización manual
+    dom.btnModalSyncGdrive.addEventListener('click', triggerDriveSync);
+    dom.sidebarBtnSyncGdrive.addEventListener('click', triggerDriveSync);
 
-    // Guardar / Vincular Token
-    dom.btnSaveGithubToken.addEventListener('click', async () => {
-      if (dom.githubTokenInput.disabled) {
-        dom.githubTokenInput.disabled = false;
-        dom.githubTokenInput.value = '';
-        dom.githubTokenInput.focus();
-        dom.btnSaveGithubToken.textContent = 'Guardar';
-        return;
-      }
-
-      const token = dom.githubTokenInput.value.trim();
-      if (!token) return alert('Ingresa un token PAT de GitHub.');
-
-      dom.btnSaveGithubToken.textContent = 'Verificando...';
+    // Botón restaurar desde Drive
+    dom.btnModalRestoreGdrive.addEventListener('click', async () => {
+      if (!confirm('¿Deseas descargar y restaurar los datos desde tu carpeta de Google Drive?')) return;
+      dom.btnModalRestoreGdrive.textContent = 'Descargando...';
       try {
-        const ghUser = await github.linkToken(token);
-        updateGitHubStatusUI();
-        alert(`¡Cuenta de GitHub @${ghUser.login} vinculada con éxito!`);
-      } catch (err) {
-        alert('Error al vincular: ' + err.message);
-      } finally {
-        dom.btnSaveGithubToken.textContent = 'Vincular';
-      }
-    });
-
-    // Desvincular
-    dom.btnUnlinkGithub.addEventListener('click', () => {
-      if (confirm('¿Deseas desvincular tu cuenta de GitHub de este navegador?')) {
-        github.unlink();
-        updateGitHubStatusUI();
-      }
-    });
-
-    // Botón Respaldar Ahora
-    dom.btnSyncNowGithub.addEventListener('click', triggerGitHubSync);
-
-    // Botón Restaurar
-    dom.btnRestoreGithub.addEventListener('click', async () => {
-      if (!confirm('¿Deseas restaurar tus datos desde el respaldo de GitHub? Se importarán correos y borradores a tu almacenamiento local.')) return;
-
-      dom.btnRestoreGithub.textContent = 'Descargando...';
-      try {
-        const data = await github.restoreFromGitHub();
-        if (data && data.emails) {
-          await db.saveEmailsBatch(data.emails);
-          state.emails = await db.getAllEmails();
-          renderEmailList();
-          updateBadges();
-          alert(`✔ Respaldo restaurado con éxito: ${data.emails.length} correos importados.`);
-          dom.githubModal.classList.add('hidden');
-        }
+        await checkAndRestoreFromDrive();
+        alert('✔ Datos restaurados exitosamente desde tu carpeta de Google Drive.');
+        dom.gdriveModal.classList.add('hidden');
       } catch (err) {
         alert('Error al restaurar: ' + err.message);
       } finally {
-        dom.btnRestoreGithub.innerHTML = '<i data-lucide="download-cloud" class="w-4 h-4"></i> Restaurar Respaldo';
+        dom.btnModalRestoreGdrive.innerHTML = '<i data-lucide="download-cloud" class="w-4 h-4 mr-1.5"></i> Restaurar desde Drive';
         if (window.lucide) window.lucide.createIcons();
       }
     });
   }
 
-  async function triggerGitHubSync() {
-    if (!github.isLinked()) {
-      alert('Por favor vincula tu Token de GitHub primero.');
-      dom.githubModal.classList.remove('hidden');
+  // Sincronización a Drive manual
+  async function triggerDriveSync() {
+    if (!gdrive.isAuthenticated()) {
+      showAuthModal();
       return;
     }
 
-    dom.githubSyncSpinner.classList.add('animate-spin');
-    dom.btnSyncNowGithub.textContent = 'Sincronizando con Gist privado...';
-    dom.githubSyncStatusMsg.textContent = 'Subiendo respaldo cifrado a GitHub...';
+    dom.gdriveSyncSpinner.classList.add('animate-spin');
+    dom.btnModalSyncGdrive.textContent = 'Sincronizando a Drive...';
+    dom.modalGdriveStatusMsg.textContent = 'Subiendo pmail_data_backup.json y pmail_account.json...';
 
-    const backupPayload = {
-      user: state.currentUser || auth.getCurrentUser(),
+    const accountData = state.currentUser || gdrive.getSavedProfile();
+    const dataPayload = {
+      user: accountData,
       contacts: state.contacts,
       drafts: await db.getAllDrafts(),
       tasks: state.tasks,
-      emails: state.emails
+      emails: state.emails,
+      syncedAt: new Date().toISOString()
     };
 
     try {
-      const result = await github.syncToGitHub(backupPayload);
-      dom.githubSyncStatusMsg.innerHTML = `✔ Respaldo exitoso! <a href="${result.gistUrl}" target="_blank" class="text-indigo-400 underline">Ver Gist Privado</a> (Actualizado: ${new Date(result.updatedAt).toLocaleTimeString()})`;
-      alert(`✔ Respaldo en la nube completado en GitHub Gist privado (${result.itemsCount} elementos).`);
+      const res = await gdrive.syncAllToDrive(accountData, dataPayload);
+      if (res && res.success) {
+        dom.modalGdriveStatusMsg.innerHTML = `<span class="text-emerald-400">✔ Sincronizado en Drive (${new Date(res.syncedAt).toLocaleTimeString()})</span>`;
+        alert('✔ Respaldo completado en tu carpeta de Google Drive.');
+      }
     } catch (err) {
-      dom.githubSyncStatusMsg.textContent = '❌ Error al sincronizar: ' + err.message;
-      alert('Error de sincronización GitHub: ' + err.message);
+      dom.modalGdriveStatusMsg.textContent = `❌ Error: ${err.message}`;
+      alert('Error al sincronizar con Google Drive: ' + err.message);
     } finally {
-      dom.githubSyncSpinner.classList.remove('animate-spin');
-      dom.btnSyncNowGithub.innerHTML = '<i data-lucide="upload-cloud" class="w-4 h-4"></i> Respaldar a GitHub Ahora';
+      dom.gdriveSyncSpinner.classList.remove('animate-spin');
+      dom.btnModalSyncGdrive.innerHTML = '<i data-lucide="upload-cloud" class="w-4 h-4 mr-1.5"></i> Sincronizar a Drive Ahora';
       if (window.lucide) window.lucide.createIcons();
     }
+  }
+
+  // Sincronización silenciosa en background con debounce
+  function scheduleSilentDriveSync() {
+    if (!gdrive.isAuthenticated()) return;
+    if (silentSyncTimeout) clearTimeout(silentSyncTimeout);
+
+    silentSyncTimeout = setTimeout(async () => {
+      try {
+        const accountData = state.currentUser || gdrive.getSavedProfile();
+        const dataPayload = {
+          user: accountData,
+          contacts: state.contacts,
+          drafts: await db.getAllDrafts(),
+          tasks: state.tasks,
+          emails: state.emails,
+          syncedAt: new Date().toISOString()
+        };
+        await gdrive.syncAllToDrive(accountData, dataPayload);
+        console.log('[Pmail] Sincronización silenciosa a Google Drive completada.');
+      } catch (err) {
+        console.warn('[Pmail] Error en sincronización silenciosa:', err.message);
+      }
+    }, 4000);
+  }
+
+  // Restaurar desde Google Drive
+  async function checkAndRestoreFromDrive() {
+    if (!gdrive.isAuthenticated()) return;
+
+    try {
+      const { dataFile } = await gdrive.findPmailFilesInFolder();
+      if (dataFile) {
+        const remoteData = await gdrive.downloadJsonFile(dataFile.id);
+        if (remoteData) {
+          if (remoteData.emails && remoteData.emails.length > 0) {
+            await db.saveEmailsBatch(remoteData.emails);
+          }
+          if (remoteData.tasks) state.tasks = remoteData.tasks;
+          if (remoteData.contacts) state.contacts = remoteData.contacts;
+          await refreshAllData();
+        }
+      }
+    } catch (err) {
+      console.warn('Error al restaurar en inicio:', err.message);
+    }
+  }
+
+  async function refreshAllData() {
+    state.emails = await db.getAllEmails();
+    renderEmailList();
+    updateBadges();
+    renderTasks();
+    renderContacts();
   }
 
   // ==========================================
@@ -491,9 +592,10 @@
         state.emails = await db.getAllEmails();
         renderEmailList();
         updateBadges();
+        scheduleSilentDriveSync();
       }
 
-      // Reenviar correos creados en la web pendientes de envío
+      // Reenviar correos pendientes generados en la web
       const pendingLocal = state.emails.filter(e => e.status === 'PENDING_SEND' && e.id.startsWith('web_mail_'));
       for (const pending of pendingLocal) {
         try {
@@ -507,6 +609,7 @@
       }
       renderEmailList();
       updateBadges();
+      scheduleSilentDriveSync();
     } catch (err) {
       console.warn('Error en syncWithPc:', err.message);
     }
@@ -518,17 +621,17 @@
   async function loadInitialData() {
     let localEmails = await db.getAllEmails();
     if (localEmails.length === 0) {
-      const activeUser = auth.getCurrentUser();
-      const myEmail = activeUser ? activeUser.email : 'usuario@pac.p';
+      const activeUser = state.currentUser || gdrive.getSavedProfile();
+      const myEmail = activeUser ? activeUser.pmailEmail : 'usuario@pac.p';
 
       localEmails = [
         {
           id: 'web_welcome_01',
           from_address: 'soporte@pac.p',
           to_address: myEmail,
-          subject: '¡Bienvenido a tu cuenta oficial Pmail!',
-          body_text: 'Tu cuenta con dominios personalizados @pac.p y @pacur.p está lista. Incluye respaldo seguro en GitHub Gist y sincronización local.',
-          body_html: '<p>Tu cuenta con dominios personalizados <code>@pac.p</code> y <code>@pacur.p</code> está lista.<br>Incluye respaldo seguro en <b>GitHub Gist</b> y sincronización en tiempo real.</p>',
+          subject: '¡Bienvenido a Pmail en Google Drive!',
+          body_text: 'Tu cuenta personalizada está lista. Los archivos pmail_account.json y pmail_data_backup.json se sincronizan automáticamente en tu carpeta de Google Drive.',
+          body_html: '<p>Tu cuenta personalizada está lista.<br>Los archivos <code>pmail_account.json</code> y <code>pmail_data_backup.json</code> se sincronizan de forma autónoma en tu carpeta de <b>Google Drive</b>.</p>',
           folder: 'inbox',
           status: 'SYNCED',
           created_at: Date.now() - 3600000
@@ -537,9 +640,9 @@
           id: 'web_welcome_02',
           from_address: 'operaciones@pacur.p',
           to_address: myEmail,
-          subject: 'Respaldo Cloud en GitHub y PC LAN',
-          body_text: 'Haz clic en el botón GitHub Cloud en la esquina superior para respaldar tus datos en un Gist privado.',
-          body_html: '<p>Haz clic en el botón <b>GitHub Cloud</b> en la esquina superior para respaldar tus datos en un Gist privado.</p>',
+          subject: 'Respaldo Autónomo Cross-Device',
+          body_text: 'Al abrir Pmail en cualquier otra PC o navegador ingresando el mismo enlace de tu carpeta de Drive, tus correos se restaurarán instantáneamente.',
+          body_html: '<p>Al abrir Pmail en cualquier otra PC o navegador ingresando el mismo enlace de tu carpeta de Drive, tus correos se restaurarán instantáneamente.</p>',
           folder: 'inbox',
           status: 'SYNCED',
           created_at: Date.now() - 1800000
@@ -699,11 +802,12 @@
         } else {
           await db.saveEmail(emailData);
           state.emails.unshift(emailData);
-          alert('Sin conexión LAN: Correo guardado de forma segura en IndexedDB (se enviará automáticamente cuando conectes la app de PC).');
+          alert('Correo guardado en cola local IndexedDB (se enviará automáticamente cuando conectes la app de PC).');
         }
         renderEmailList();
         updateBadges();
         closeComposer();
+        scheduleSilentDriveSync();
       } catch (err) {
         emailData.status = 'PENDING_SEND';
         await db.saveEmail(emailData);
@@ -711,10 +815,11 @@
         renderEmailList();
         updateBadges();
         closeComposer();
-        alert('Guardado en cola IndexedDB local: ' + err.message);
+        scheduleSilentDriveSync();
+        alert('Guardado en cola IndexedDB: ' + err.message);
       } finally {
         dom.btnSubmitSend.disabled = false;
-        dom.btnSubmitSend.innerHTML = '<i data-lucide="send" class="w-3.5 h-3.5"></i> Enviar';
+        dom.btnSubmitSend.innerHTML = '<i data-lucide="send" class="w-3.5 h-3.5 mr-1"></i> Enviar';
         if (window.lucide) window.lucide.createIcons();
       }
     });
@@ -733,6 +838,7 @@
       dom.composerStatusTip.textContent = 'Borrador guardado en IndexedDB';
       setTimeout(() => (dom.composerStatusTip.textContent = ''), 2500);
       updateBadges();
+      scheduleSilentDriveSync();
     });
 
     // Exportar JSON
@@ -790,6 +896,7 @@
         }
         renderEmailList();
         updateBadges();
+        scheduleSilentDriveSync();
       } catch (err) {
         dom.importResultStatus.textContent = `Error: ${err.message}`;
       }
@@ -806,6 +913,7 @@
       state.tasks.push({ id: Date.now(), text: val, done: false });
       dom.inputNewTask.value = '';
       renderTasks();
+      scheduleSilentDriveSync();
     });
   }
 
@@ -816,7 +924,7 @@
           closeComposer();
           dom.lanModal.classList.add('hidden');
           dom.importModal.classList.add('hidden');
-          dom.githubModal.classList.add('hidden');
+          dom.gdriveModal.classList.add('hidden');
           dom.commandModal.classList.add('hidden');
         }
         return;
@@ -856,6 +964,7 @@
     const t = state.tasks.find(x => x.id === id);
     if (t) t.done = !t.done;
     renderTasks();
+    scheduleSilentDriveSync();
   };
 
   function renderContacts() {
