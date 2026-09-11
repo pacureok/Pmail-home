@@ -1,20 +1,24 @@
 /**
- * Pmail Web Client - Main Application Controller (GitHub Pages & Local / Cloud Ready)
+ * Pmail Web Client - Main Application Controller
+ * Integración completa: Autenticación Gmail-Style, GitHub Cloud Sync, IndexedDB y LAN Host
  */
 (function () {
   const db = new window.PmailWebDatabase();
   const lan = new window.PmailLanConnector();
   const backup = new window.PmailBackupReader();
+  const auth = new window.PmailAuth();
+  const github = new window.PmailGitHubSync();
 
   const state = {
+    currentUser: null,
     currentFolder: 'inbox',
     currentFilter: 'all',
     selectedEmailId: null,
     emails: [],
     tasks: [
-      { id: 1, text: 'Sincronizar cliente Web con PC Host', done: false },
-      { id: 2, text: 'Probar respaldo cifrado en IndexedDB', done: true },
-      { id: 3, text: 'Verificar despliegue en GitHub Pages', done: true }
+      { id: 1, text: 'Configurar cuenta @pac.p o @pacur.p', done: true },
+      { id: 2, text: 'Vincular token de GitHub para respaldo privado', done: false },
+      { id: 3, text: 'Probar envío de correo offline con IndexedDB', done: false }
     ],
     contacts: [
       { name: 'Soporte PAC', email: 'soporte@pacur.p' },
@@ -25,6 +29,59 @@
   };
 
   const dom = {
+    // Auth Modal
+    authModal: document.getElementById('auth-modal'),
+    authTabLogin: document.getElementById('auth-tab-login'),
+    authTabRegister: document.getElementById('auth-tab-register'),
+    formLogin: document.getElementById('form-login'),
+    formRegister: document.getElementById('form-register'),
+    loginIdentifier: document.getElementById('login-identifier'),
+    loginPassword: document.getElementById('login-password'),
+    loginErrorMsg: document.getElementById('login-error-msg'),
+    regFullname: document.getElementById('reg-fullname'),
+    regUsername: document.getElementById('reg-username'),
+    regDomain: document.getElementById('reg-domain'),
+    regPreviewEmail: document.getElementById('reg-preview-email'),
+    regPassword: document.getElementById('reg-password'),
+    regConfirmPassword: document.getElementById('reg-confirm-password'),
+    regErrorMsg: document.getElementById('reg-error-msg'),
+
+    // Perfil y Header
+    btnUserProfile: document.getElementById('btn-user-profile'),
+    userAvatarBadge: document.getElementById('user-avatar-badge'),
+    userDropdown: document.getElementById('user-dropdown'),
+    dropdownAvatar: document.getElementById('dropdown-avatar'),
+    dropdownUserName: document.getElementById('dropdown-user-name'),
+    dropdownUserEmail: document.getElementById('dropdown-user-email'),
+    dropdownBtnGithub: document.getElementById('dropdown-btn-github'),
+    dropdownGithubStatus: document.getElementById('dropdown-github-status'),
+    dropdownBtnSwitchAccount: document.getElementById('dropdown-btn-switch-account'),
+    btnLogout: document.getElementById('btn-logout'),
+
+    // Sidebar Cuenta
+    sidebarAvatar: document.getElementById('sidebar-avatar'),
+    currentAccountName: document.getElementById('current-account-name'),
+    currentAccountEmail: document.getElementById('current-account-email'),
+    sidebarBtnSyncGithub: document.getElementById('sidebar-btn-sync-github'),
+    githubSyncSpinner: document.getElementById('github-sync-spinner'),
+
+    // GitHub Modal
+    githubModal: document.getElementById('github-modal'),
+    btnOpenGithub: document.getElementById('btn-open-github'),
+    btnCloseGithub: document.getElementById('btn-close-github'),
+    githubHeaderLabel: document.getElementById('github-header-label'),
+    githubAccountCard: document.getElementById('github-account-card'),
+    githubAvatarImg: document.getElementById('github-avatar-img'),
+    githubUserName: document.getElementById('github-user-name'),
+    githubUserLink: document.getElementById('github-user-link'),
+    btnUnlinkGithub: document.getElementById('btn-unlink-github'),
+    githubTokenInput: document.getElementById('github-token-input'),
+    btnSaveGithubToken: document.getElementById('btn-save-github-token'),
+    btnSyncNowGithub: document.getElementById('btn-sync-now-github'),
+    btnRestoreGithub: document.getElementById('btn-restore-github'),
+    githubSyncStatusMsg: document.getElementById('github-sync-status-msg'),
+
+    // Vistas y Bandejas
     emailList: document.getElementById('email-list'),
     emailCountLabel: document.getElementById('email-count-label'),
     emptyState: document.getElementById('empty-state'),
@@ -45,6 +102,7 @@
     lanUrlInput: document.getElementById('lan-url-input'),
     btnTestLan: document.getElementById('btn-test-lan'),
     btnCloseLan: document.getElementById('btn-close-lan'),
+
     // Compositor
     composerModal: document.getElementById('composer-modal'),
     composerFrom: document.getElementById('composer-from'),
@@ -58,6 +116,7 @@
     btnTogglePreview: document.getElementById('btn-toggle-preview'),
     btnSaveDraft: document.getElementById('btn-save-draft'),
     btnSubmitSend: document.getElementById('btn-submit-send'),
+
     // Import / Export
     btnImportBackup: document.getElementById('btn-import-backup'),
     importModal: document.getElementById('import-modal'),
@@ -65,10 +124,12 @@
     inputBackupFile: document.getElementById('input-backup-file'),
     importResultStatus: document.getElementById('import-result-status'),
     btnExportJson: document.getElementById('btn-export-json'),
+
     // Command Palette
     commandModal: document.getElementById('command-modal'),
     btnCommandPalette: document.getElementById('btn-command-palette'),
     btnThemeToggle: document.getElementById('btn-theme-toggle'),
+
     // Widgets
     calendarGrid: document.getElementById('calendar-grid'),
     tasksList: document.getElementById('tasks-list'),
@@ -86,19 +147,312 @@
     renderContacts();
     setupEventListeners();
     setupShortcuts();
+    setupAuthListeners();
+    setupGitHubListeners();
 
     if (window.lucide) window.lucide.createIcons();
 
-    // 1. Cargar datos locales de IndexedDB
+    // 1. Verificar autenticación de usuario
+    const user = auth.getCurrentUser();
+    if (!user) {
+      showAuthModal('register');
+    } else {
+      applyUserProfile(user);
+    }
+
+    // 2. Cargar datos locales de IndexedDB
     await loadInitialData();
 
-    // 2. Conectar y sincronizar con PC Host si está activo
+    // 3. Conectar LAN
     lan.on(handleLanEvents);
     lan.startAutoSync(6000);
     await checkLanSync();
+
+    // 4. Actualizar estado de GitHub
+    updateGitHubStatusUI();
   }
 
-  // Manejar eventos bidireccionales en tiempo real
+  // ==========================================
+  // AUTENTICACIÓN Y PERFIL DE USUARIO
+  // ==========================================
+  function showAuthModal(mode = 'login') {
+    dom.authModal.classList.remove('hidden');
+    switchAuthTab(mode);
+  }
+
+  function hideAuthModal() {
+    dom.authModal.classList.add('hidden');
+  }
+
+  function switchAuthTab(mode) {
+    if (mode === 'login') {
+      dom.authTabLogin.className = 'flex-1 py-2 rounded-lg text-slate-200 bg-slate-700/80 shadow-sm transition';
+      dom.authTabRegister.className = 'flex-1 py-2 rounded-lg text-slate-400 hover:text-slate-200 transition';
+      dom.formLogin.classList.remove('hidden');
+      dom.formRegister.classList.add('hidden');
+      dom.loginIdentifier.focus();
+    } else {
+      dom.authTabRegister.className = 'flex-1 py-2 rounded-lg text-slate-200 bg-slate-700/80 shadow-sm transition';
+      dom.authTabLogin.className = 'flex-1 py-2 rounded-lg text-slate-400 hover:text-slate-200 transition';
+      dom.formRegister.classList.remove('hidden');
+      dom.formLogin.classList.add('hidden');
+      dom.regFullname.focus();
+    }
+  }
+
+  function applyUserProfile(user) {
+    state.currentUser = user;
+    const initial = (user.fullName ? user.fullName[0] : user.username[0] || 'P').toUpperCase();
+
+    // Header y Avatar
+    dom.userAvatarBadge.textContent = initial;
+    dom.dropdownAvatar.textContent = initial;
+    dom.dropdownUserName.textContent = user.fullName || user.username;
+    dom.dropdownUserEmail.textContent = user.email;
+
+    // Sidebar
+    dom.sidebarAvatar.textContent = initial;
+    dom.currentAccountName.textContent = user.fullName || user.username;
+    dom.currentAccountEmail.textContent = user.email;
+
+    // Actualizar selector del compositor
+    dom.composerFrom.innerHTML = `
+      <option value="${user.email}">${user.email} (Mi Cuenta Activa)</option>
+      <option value="${user.username}${user.domain === '@pac.p' ? '@pacur.p' : '@pac.p'}">Alias ${user.domain === '@pac.p' ? '@pacur.p' : '@pac.p'}</option>
+    `;
+  }
+
+  function setupAuthListeners() {
+    dom.authTabLogin.addEventListener('click', () => switchAuthTab('login'));
+    dom.authTabRegister.addEventListener('click', () => switchAuthTab('register'));
+
+    // Previsualización dinámica de email en registro
+    const updatePreview = () => {
+      const u = dom.regUsername.value.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '');
+      const d = dom.regDomain.value;
+      dom.regPreviewEmail.textContent = u ? `${u}${d}` : `${d}`;
+    };
+    dom.regUsername.addEventListener('input', updatePreview);
+    dom.regDomain.addEventListener('change', updatePreview);
+
+    // Registro
+    dom.formRegister.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      dom.regErrorMsg.classList.add('hidden');
+
+      const pass = dom.regPassword.value;
+      const confirmPass = dom.regConfirmPassword.value;
+      if (pass !== confirmPass) {
+        dom.regErrorMsg.textContent = 'Las contraseñas no coinciden.';
+        dom.regErrorMsg.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        const user = await auth.register({
+          fullName: dom.regFullname.value,
+          username: dom.regUsername.value,
+          domain: dom.regDomain.value,
+          password: pass
+        });
+
+        applyUserProfile(user);
+        hideAuthModal();
+        alert(`¡Bienvenido a Pmail! Tu cuenta ${user.email} ha sido creada y activada.`);
+      } catch (err) {
+        dom.regErrorMsg.textContent = err.message;
+        dom.regErrorMsg.classList.remove('hidden');
+      }
+    });
+
+    // Login
+    dom.formLogin.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      dom.loginErrorMsg.classList.add('hidden');
+
+      try {
+        const user = await auth.login(dom.loginIdentifier.value, dom.loginPassword.value);
+        applyUserProfile(user);
+        hideAuthModal();
+      } catch (err) {
+        dom.loginErrorMsg.textContent = err.message;
+        dom.loginErrorMsg.classList.remove('hidden');
+      }
+    });
+
+    // Dropdown de perfil
+    dom.btnUserProfile.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dom.userDropdown.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!dom.userDropdown.contains(e.target) && e.target !== dom.btnUserProfile) {
+        dom.userDropdown.classList.add('hidden');
+      }
+    });
+
+    dom.dropdownBtnSwitchAccount.addEventListener('click', () => {
+      dom.userDropdown.classList.add('hidden');
+      showAuthModal('login');
+    });
+
+    dom.btnLogout.addEventListener('click', () => {
+      dom.userDropdown.classList.add('hidden');
+      auth.logout();
+      showAuthModal('login');
+    });
+  }
+
+  // ==========================================
+  // GITHUB CLOUD SYNC & GISTS
+  // ==========================================
+  function updateGitHubStatusUI() {
+    const isLinked = github.isLinked();
+    const user = github.getSavedGitHubUser();
+
+    if (isLinked && user) {
+      dom.githubHeaderLabel.textContent = `@${user.login}`;
+      dom.dropdownGithubStatus.textContent = `@${user.login}`;
+      dom.dropdownGithubStatus.className = 'text-[10px] text-emerald-400 font-mono';
+
+      dom.githubAccountCard.classList.remove('hidden');
+      dom.githubAvatarImg.src = user.avatarUrl || 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png';
+      dom.githubUserName.textContent = user.name || user.login;
+      dom.githubUserLink.href = user.htmlUrl || `https://github.com/${user.login}`;
+      dom.githubUserLink.textContent = `@${user.login} en GitHub`;
+
+      dom.githubTokenInput.value = '••••••••••••••••••••••••••••••••';
+      dom.githubTokenInput.disabled = true;
+      dom.btnSaveGithubToken.textContent = 'Actualizar';
+    } else {
+      dom.githubHeaderLabel.textContent = 'GitHub Cloud';
+      dom.dropdownGithubStatus.textContent = 'Desconectado';
+      dom.dropdownGithubStatus.className = 'text-[10px] text-slate-500';
+
+      dom.githubAccountCard.classList.add('hidden');
+      dom.githubTokenInput.value = '';
+      dom.githubTokenInput.disabled = false;
+      dom.btnSaveGithubToken.textContent = 'Vincular';
+    }
+  }
+
+  function setupGitHubListeners() {
+    const openGhModal = () => {
+      dom.githubModal.classList.remove('hidden');
+      dom.userDropdown.classList.add('hidden');
+      dom.githubSyncStatusMsg.textContent = '';
+      updateGitHubStatusUI();
+    };
+
+    dom.btnOpenGithub.addEventListener('click', openGhModal);
+    dom.dropdownBtnGithub.addEventListener('click', openGhModal);
+    dom.sidebarBtnSyncGithub.addEventListener('click', () => {
+      if (!github.isLinked()) {
+        openGhModal();
+      } else {
+        triggerGitHubSync();
+      }
+    });
+
+    dom.btnCloseGithub.addEventListener('click', () => dom.githubModal.classList.add('hidden'));
+
+    // Guardar / Vincular Token
+    dom.btnSaveGithubToken.addEventListener('click', async () => {
+      if (dom.githubTokenInput.disabled) {
+        dom.githubTokenInput.disabled = false;
+        dom.githubTokenInput.value = '';
+        dom.githubTokenInput.focus();
+        dom.btnSaveGithubToken.textContent = 'Guardar';
+        return;
+      }
+
+      const token = dom.githubTokenInput.value.trim();
+      if (!token) return alert('Ingresa un token PAT de GitHub.');
+
+      dom.btnSaveGithubToken.textContent = 'Verificando...';
+      try {
+        const ghUser = await github.linkToken(token);
+        updateGitHubStatusUI();
+        alert(`¡Cuenta de GitHub @${ghUser.login} vinculada con éxito!`);
+      } catch (err) {
+        alert('Error al vincular: ' + err.message);
+      } finally {
+        dom.btnSaveGithubToken.textContent = 'Vincular';
+      }
+    });
+
+    // Desvincular
+    dom.btnUnlinkGithub.addEventListener('click', () => {
+      if (confirm('¿Deseas desvincular tu cuenta de GitHub de este navegador?')) {
+        github.unlink();
+        updateGitHubStatusUI();
+      }
+    });
+
+    // Botón Respaldar Ahora
+    dom.btnSyncNowGithub.addEventListener('click', triggerGitHubSync);
+
+    // Botón Restaurar
+    dom.btnRestoreGithub.addEventListener('click', async () => {
+      if (!confirm('¿Deseas restaurar tus datos desde el respaldo de GitHub? Se importarán correos y borradores a tu almacenamiento local.')) return;
+
+      dom.btnRestoreGithub.textContent = 'Descargando...';
+      try {
+        const data = await github.restoreFromGitHub();
+        if (data && data.emails) {
+          await db.saveEmailsBatch(data.emails);
+          state.emails = await db.getAllEmails();
+          renderEmailList();
+          updateBadges();
+          alert(`✔ Respaldo restaurado con éxito: ${data.emails.length} correos importados.`);
+          dom.githubModal.classList.add('hidden');
+        }
+      } catch (err) {
+        alert('Error al restaurar: ' + err.message);
+      } finally {
+        dom.btnRestoreGithub.innerHTML = '<i data-lucide="download-cloud" class="w-4 h-4"></i> Restaurar Respaldo';
+        if (window.lucide) window.lucide.createIcons();
+      }
+    });
+  }
+
+  async function triggerGitHubSync() {
+    if (!github.isLinked()) {
+      alert('Por favor vincula tu Token de GitHub primero.');
+      dom.githubModal.classList.remove('hidden');
+      return;
+    }
+
+    dom.githubSyncSpinner.classList.add('animate-spin');
+    dom.btnSyncNowGithub.textContent = 'Sincronizando con Gist privado...';
+    dom.githubSyncStatusMsg.textContent = 'Subiendo respaldo cifrado a GitHub...';
+
+    const backupPayload = {
+      user: state.currentUser || auth.getCurrentUser(),
+      contacts: state.contacts,
+      drafts: await db.getAllDrafts(),
+      tasks: state.tasks,
+      emails: state.emails
+    };
+
+    try {
+      const result = await github.syncToGitHub(backupPayload);
+      dom.githubSyncStatusMsg.innerHTML = `✔ Respaldo exitoso! <a href="${result.gistUrl}" target="_blank" class="text-indigo-400 underline">Ver Gist Privado</a> (Actualizado: ${new Date(result.updatedAt).toLocaleTimeString()})`;
+      alert(`✔ Respaldo en la nube completado en GitHub Gist privado (${result.itemsCount} elementos).`);
+    } catch (err) {
+      dom.githubSyncStatusMsg.textContent = '❌ Error al sincronizar: ' + err.message;
+      alert('Error de sincronización GitHub: ' + err.message);
+    } finally {
+      dom.githubSyncSpinner.classList.remove('animate-spin');
+      dom.btnSyncNowGithub.innerHTML = '<i data-lucide="upload-cloud" class="w-4 h-4"></i> Respaldar a GitHub Ahora';
+      if (window.lucide) window.lucide.createIcons();
+    }
+  }
+
+  // ==========================================
+  // SINCRONIZACIÓN LAN CON APP DE PC
+  // ==========================================
   async function handleLanEvents(event) {
     if (event.type === 'connection_change') {
       updateLanBadge(event.data?.connected);
@@ -129,14 +483,8 @@
     }
   }
 
-  /**
-   * Sincronización bidireccional:
-   * 1. Descarga correos de la PC hacia IndexedDB
-   * 2. Reenvía cualquier correo pendiente generado en la Web hacia la PC
-   */
   async function syncWithPc() {
     try {
-      // 1. Descargar correos de la PC
       const pcEmails = await lan.fetchEmails();
       if (pcEmails && pcEmails.length > 0) {
         await db.saveEmailsBatch(pcEmails);
@@ -145,7 +493,7 @@
         updateBadges();
       }
 
-      // 2. Comprobar si hay correos creados en la web pendientes de envío
+      // Reenviar correos creados en la web pendientes de envío
       const pendingLocal = state.emails.filter(e => e.status === 'PENDING_SEND' && e.id.startsWith('web_mail_'));
       for (const pending of pendingLocal) {
         try {
@@ -164,17 +512,23 @@
     }
   }
 
+  // ==========================================
+  // DATOS Y BANDEJAS
+  // ==========================================
   async function loadInitialData() {
     let localEmails = await db.getAllEmails();
     if (localEmails.length === 0) {
+      const activeUser = auth.getCurrentUser();
+      const myEmail = activeUser ? activeUser.email : 'usuario@pac.p';
+
       localEmails = [
         {
           id: 'web_welcome_01',
           from_address: 'soporte@pac.p',
-          to_address: 'usuario@pac.p',
-          subject: 'Bienvenido al Cliente Web Pmail (@pac.p / @pacur.p)',
-          body_text: 'Este cliente web funciona de forma autónoma con IndexedDB y se sincroniza en tiempo real con la app de PC en la red local.',
-          body_html: '<p>Bienvenido al cliente web <b>Pmail</b>.<br>Funciona de forma autónoma con <code>IndexedDB</code> y se sincroniza en tiempo real con la app de PC en tu red local.</p>',
+          to_address: myEmail,
+          subject: '¡Bienvenido a tu cuenta oficial Pmail!',
+          body_text: 'Tu cuenta con dominios personalizados @pac.p y @pacur.p está lista. Incluye respaldo seguro en GitHub Gist y sincronización local.',
+          body_html: '<p>Tu cuenta con dominios personalizados <code>@pac.p</code> y <code>@pacur.p</code> está lista.<br>Incluye respaldo seguro en <b>GitHub Gist</b> y sincronización en tiempo real.</p>',
           folder: 'inbox',
           status: 'SYNCED',
           created_at: Date.now() - 3600000
@@ -182,10 +536,10 @@
         {
           id: 'web_welcome_02',
           from_address: 'operaciones@pacur.p',
-          to_address: 'usuario@pac.p',
-          subject: 'Configuración de sincronización local',
-          body_text: 'Haz clic en el indicador de LAN en la barra superior para verificar la IP de tu PC o tu URL de túnel.',
-          body_html: '<p>Haz clic en el indicador de LAN en la barra superior para verificar la IP de tu PC o tu URL de túnel.</p>',
+          to_address: myEmail,
+          subject: 'Respaldo Cloud en GitHub y PC LAN',
+          body_text: 'Haz clic en el botón GitHub Cloud en la esquina superior para respaldar tus datos en un Gist privado.',
+          body_html: '<p>Haz clic en el botón <b>GitHub Cloud</b> en la esquina superior para respaldar tus datos en un Gist privado.</p>',
           folder: 'inbox',
           status: 'SYNCED',
           created_at: Date.now() - 1800000
@@ -218,9 +572,9 @@
     filtered.forEach(email => {
       const item = document.createElement('div');
       item.className = `email-item p-3 cursor-pointer border-b border-slate-800/40 ${state.selectedEmailId === email.id ? 'selected' : ''}`;
-      
-      const statusColor = email.status === 'PENDING_SEND' 
-        ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' 
+
+      const statusColor = email.status === 'PENDING_SEND'
+        ? 'text-amber-400 bg-amber-500/10 border-amber-500/20'
         : 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20';
 
       item.innerHTML = `
@@ -336,7 +690,6 @@
 
       try {
         if (lan.isConnected) {
-          // Despachar inmediatamente mediante PC Host
           const res = await lan.sendEmail(emailData);
           emailData.status = res?.result?.status || 'SENT';
           emailData.folder = 'sent';
@@ -344,7 +697,6 @@
           state.emails.unshift(emailData);
           alert('Correo enviado exitosamente a través del motor SMTP de la PC.');
         } else {
-          // Guardar localmente en IndexedDB
           await db.saveEmail(emailData);
           state.emails.unshift(emailData);
           alert('Sin conexión LAN: Correo guardado de forma segura en IndexedDB (se enviará automáticamente cuando conectes la app de PC).');
@@ -353,7 +705,6 @@
         updateBadges();
         closeComposer();
       } catch (err) {
-        // Fallback resiliente a IndexedDB
         emailData.status = 'PENDING_SEND';
         await db.saveEmail(emailData);
         state.emails.unshift(emailData);
@@ -413,7 +764,7 @@
         alert('✔ Conexión LAN con PC Host establecida exitosamente!');
         dom.lanModal.classList.add('hidden');
       } else {
-        alert('⚠️ No se pudo conectar con ' + newUrl + '. Asegúrate de que la app de PC esté abierta y en el mismo puerto (7890).');
+        alert('⚠️ No se pudo conectar con ' + newUrl + '. Asegúrate de que la app de PC esté abierta en el puerto 7890.');
       }
     });
 
@@ -435,7 +786,7 @@
           state.emails = await db.getAllEmails();
           dom.importResultStatus.textContent = `✔ ${emailsToImport.length} correos importados exitosamente.`;
         } else {
-          dom.importResultStatus.textContent = '✔ Archivo .pmailpkg procesado con Web Crypto.';
+          dom.importResultStatus.textContent = '✔ Archivo procesado con Web Crypto.';
         }
         renderEmailList();
         updateBadges();
@@ -465,6 +816,7 @@
           closeComposer();
           dom.lanModal.classList.add('hidden');
           dom.importModal.classList.add('hidden');
+          dom.githubModal.classList.add('hidden');
           dom.commandModal.classList.add('hidden');
         }
         return;

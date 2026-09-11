@@ -4,13 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pmail Web - Superhuman Cloud Client (@pac.p / @pacur.p)</title>
-  
+
   <!-- Rutas relativas estrictas para compatibilidad total con GitHub Pages -->
   <link rel="stylesheet" href="./styles.css">
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/561/561127.png">
-  
-  <!-- Tailwind CSS CDN para renderizado idéntico de diseño moderno y glassmorphism -->
+
+  <!-- Tailwind CSS CDN para renderizado de diseño moderno y glassmorphism -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -30,13 +30,13 @@
       }
     };
   </script>
-  
+
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 font-sans antialiased select-none overflow-hidden h-screen flex flex-col">
 
-  <!-- BARRA SUPERIOR WEB (IDÉNTICA A PC) -->
+  <!-- BARRA SUPERIOR WEB (ESTILO SUPERHUMAN / GMAIL) -->
   <header class="titlebar flex items-center justify-between px-4 h-11 bg-slate-900/80 backdrop-blur border-b border-slate-800 text-xs">
     <div class="flex items-center gap-2">
       <div class="w-3 h-3 rounded-full bg-indigo-500 shadow-sm shadow-indigo-500/50"></div>
@@ -58,10 +58,16 @@
       </button>
     </div>
 
-    <!-- Opciones de Usuario y Tema -->
+    <!-- Opciones de Usuario, GitHub Cloud y Tema -->
     <div class="flex items-center gap-2">
+      <!-- Botón de Sincronización GitHub -->
+      <button id="btn-open-github" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1.5 border border-slate-700" title="Vincular o Sincronizar con GitHub">
+        <i data-lucide="github" class="w-3.5 h-3.5 text-indigo-400"></i>
+        <span id="github-header-label">GitHub Cloud</span>
+      </button>
+
       <button id="btn-import-backup" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1.5 border border-slate-700">
-        <i data-lucide="file-up" class="w-3.5 h-3.5 text-indigo-400"></i> Importar .pmailpkg
+        <i data-lucide="file-up" class="w-3.5 h-3.5 text-indigo-400"></i> .pmailpkg
       </button>
       <button id="btn-theme-toggle" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition" title="Cambiar tema">
         <i data-lucide="moon" class="w-4 h-4"></i>
@@ -69,6 +75,42 @@
       <button id="btn-lan-settings" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition" title="Ajustes LAN PC">
         <i data-lucide="settings" class="w-4 h-4"></i>
       </button>
+
+      <!-- Botón de Perfil de Usuario con Menú Desplegable -->
+      <div class="relative">
+        <button id="btn-user-profile" class="flex items-center gap-2 p-1 rounded-xl hover:bg-slate-800 border border-slate-700/80 transition">
+          <div id="user-avatar-badge" class="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-bold text-white text-xs shadow-sm">
+            ?
+          </div>
+        </button>
+
+        <!-- Menú Desplegable de Cuenta -->
+        <div id="user-dropdown" class="hidden absolute right-0 mt-2 w-64 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-3 z-50 text-xs space-y-3">
+          <div class="flex items-center gap-2.5 pb-2 border-b border-slate-800">
+            <div id="dropdown-avatar" class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-bold text-white text-sm">
+              ?
+            </div>
+            <div class="truncate">
+              <p id="dropdown-user-name" class="font-semibold text-slate-200 truncate">Usuario Pmail</p>
+              <p id="dropdown-user-email" class="text-[11px] text-indigo-400 truncate">cuenta@pac.p</p>
+            </div>
+          </div>
+          <div class="space-y-1">
+            <button id="dropdown-btn-github" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-300 text-left">
+              <span class="flex items-center gap-2"><i data-lucide="github" class="w-3.5 h-3.5 text-slate-400"></i> Respaldo GitHub</span>
+              <span id="dropdown-github-status" class="text-[10px] text-slate-500">Desconectado</span>
+            </button>
+            <button id="dropdown-btn-switch-account" class="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-slate-800 text-slate-300 text-left">
+              <span class="flex items-center gap-2"><i data-lucide="users" class="w-3.5 h-3.5 text-slate-400"></i> Cambiar Cuenta</span>
+            </button>
+          </div>
+          <div class="pt-2 border-t border-slate-800">
+            <button id="btn-logout" class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-rose-500/20 text-rose-400 text-left transition font-medium">
+              <i data-lucide="log-out" class="w-3.5 h-3.5"></i> Cerrar Sesión
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -77,15 +119,15 @@
 
     <!-- 1. BARRA DE NAVEGACIÓN Y CARPETAS -->
     <aside class="w-64 bg-slate-900/50 backdrop-blur flex flex-col border-r border-slate-800/80">
-      <!-- Selector de Cuenta @pac.p / @pacur.p -->
+      <!-- Tarjeta de Cuenta Activa -->
       <div class="p-3 border-b border-slate-800/80">
-        <div class="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 border border-slate-700/50">
+        <div class="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 border border-slate-700/50 cursor-pointer" id="sidebar-account-card">
           <div class="flex items-center gap-2.5 overflow-hidden">
-            <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-bold text-white text-sm shadow-md shadow-indigo-500/30">
-              W
+            <div id="sidebar-avatar" class="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center font-bold text-white text-sm shadow-md shadow-indigo-500/30">
+              P
             </div>
             <div class="truncate">
-              <p class="font-medium text-xs text-slate-200 truncate" id="current-account-name">Pmail Cloud User</p>
+              <p class="font-medium text-xs text-slate-200 truncate" id="current-account-name">Cargando...</p>
               <p class="text-[11px] text-indigo-400 truncate" id="current-account-email">usuario@pac.p</p>
             </div>
           </div>
@@ -135,7 +177,16 @@
           <span id="badge-drafts" class="px-1.5 py-0.2 rounded-full bg-slate-800 text-slate-400 text-[10px]">0</span>
         </button>
 
-        <div class="pt-3 pb-1 px-3 text-[10px] uppercase font-semibold tracking-wider text-slate-500">Almacenamiento Cloud</div>
+        <div class="pt-3 pb-1 px-3 text-[10px] uppercase font-semibold tracking-wider text-slate-500">Nube & Respaldos</div>
+
+        <!-- Botón de Sincronización GitHub en Sidebar -->
+        <button id="sidebar-btn-sync-github" class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/40">
+          <div class="flex items-center gap-2.5">
+            <i data-lucide="github" class="w-4 h-4 text-indigo-400"></i>
+            <span>Sincronizar con GitHub</span>
+          </div>
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-slate-500" id="github-sync-spinner"></i>
+        </button>
 
         <button id="btn-export-json" class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/40">
           <div class="flex items-center gap-2.5">
@@ -150,7 +201,7 @@
       <div class="p-3 border-t border-slate-800/80 bg-slate-900/30 text-[11px] space-y-1.5">
         <div class="flex items-center justify-between text-slate-400">
           <span class="flex items-center gap-1.5"><i data-lucide="database" class="w-3.5 h-3.5 text-indigo-400"></i> IndexedDB</span>
-          <span class="text-emerald-400 text-[10px]">Offline Listo</span>
+          <span class="text-emerald-400 text-[10px]">Activo</span>
         </div>
         <div class="flex items-center justify-between text-slate-400">
           <span class="flex items-center gap-1.5"><i data-lucide="globe" class="w-3.5 h-3.5 text-indigo-400"></i> Dominios</span>
@@ -161,7 +212,6 @@
 
     <!-- 2. BANDEJA DE ENTRADA / LISTA DE CORREOS -->
     <section class="w-80 lg:w-96 bg-slate-900/20 flex flex-col border-r border-slate-800/80">
-      <!-- Pestañas de Vista Rápida -->
       <div class="flex items-center justify-between px-3 py-2.5 border-b border-slate-800/80 text-xs">
         <div class="flex gap-1 bg-slate-800/60 p-1 rounded-lg">
           <button class="tab-btn active px-3 py-1 rounded-md font-medium text-slate-200 bg-slate-700/80" data-filter="all">Todos</button>
@@ -183,7 +233,7 @@
           <i data-lucide="mail-open" class="w-8 h-8 text-indigo-400/60"></i>
         </div>
         <h3 class="text-base font-semibold text-slate-300 mb-1">Pmail Cloud / Web Client</h3>
-        <p class="text-xs max-w-sm text-slate-400 mb-4">Accede a tus correos de @pac.p y @pacur.p desde cualquier navegador o sincroniza en tiempo real con la app de PC en la red local.</p>
+        <p class="text-xs max-w-sm text-slate-400 mb-4">Accede a tus correos de @pac.p y @pacur.p desde cualquier navegador o sincroniza en tiempo real con la app de PC o tu GitHub Gist privado.</p>
         <div class="flex items-center gap-2 text-[11px] text-slate-500">
           <span class="flex items-center gap-1"><kbd class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 font-mono">C</kbd> Redactar</span>
           <span>•</span>
@@ -300,8 +350,7 @@
       <div class="flex items-center gap-2">
         <span class="text-slate-500 w-12 text-right">De:</span>
         <select id="composer-from" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none">
-          <option value="usuario@pac.p">usuario@pac.p</option>
-          <option value="operaciones@pacur.p">operaciones@pacur.p</option>
+          <!-- Rellenado con la cuenta activa -->
         </select>
       </div>
       <div class="flex items-center gap-2">
@@ -332,8 +381,131 @@
     </div>
   </div>
 
+  <!-- MODAL DE AUTENTICACIÓN / REGISTRO E INICIO DE SESIÓN (ESTILO GMAIL) -->
+  <div id="auth-modal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-50 p-4">
+    <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden p-6 sm:p-8">
+      <!-- Header Estilo Google / Gmail -->
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center mx-auto mb-3 shadow-lg shadow-indigo-500/20">
+          <div class="w-5 h-5 rounded-full bg-indigo-500 animate-pulse"></div>
+        </div>
+        <h2 class="text-xl font-bold text-slate-100">Bienvenido a Pmail</h2>
+        <p class="text-xs text-slate-400 mt-1">Tu cliente de correo privado con dominios <span class="text-indigo-400 font-medium">@pac.p</span> y <span class="text-indigo-400 font-medium">@pacur.p</span></p>
+      </div>
+
+      <!-- Pestañas: Iniciar Sesión / Crear Cuenta -->
+      <div class="flex rounded-xl bg-slate-800/80 p-1 mb-5 text-xs font-medium border border-slate-700/60">
+        <button id="auth-tab-login" class="flex-1 py-2 rounded-lg text-slate-200 bg-slate-700/80 shadow-sm transition">Iniciar Sesión</button>
+        <button id="auth-tab-register" class="flex-1 py-2 rounded-lg text-slate-400 hover:text-slate-200 transition">Crear Cuenta</button>
+      </div>
+
+      <!-- Formulario de Inicio de Sesión -->
+      <form id="form-login" class="space-y-4 text-xs">
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Correo electrónico o usuario</label>
+          <input type="text" id="login-identifier" placeholder="ej. usuario@pac.p o usuario" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-200 focus:outline-none focus:border-indigo-500 transition">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Contraseña</label>
+          <input type="password" id="login-password" placeholder="Tu contraseña" required class="w-full px-3.5 py-2.5 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-200 focus:outline-none focus:border-indigo-500 transition">
+        </div>
+        <div id="login-error-msg" class="hidden text-[11px] text-rose-400 bg-rose-500/10 border border-rose-500/20 p-2 rounded-lg"></div>
+        <button type="submit" class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-lg shadow-indigo-600/30 transition">
+          Iniciar Sesión en Pmail
+        </button>
+      </form>
+
+      <!-- Formulario de Registro -->
+      <form id="form-register" class="hidden space-y-3.5 text-xs">
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Nombre Completo</label>
+          <input type="text" id="reg-fullname" placeholder="ej. Carlos Mendoza" required class="w-full px-3.5 py-2 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-200 focus:outline-none focus:border-indigo-500 transition">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Dirección de correo deseada</label>
+          <div class="flex items-center gap-1.5">
+            <input type="text" id="reg-username" placeholder="tucuenta" required class="flex-1 px-3.5 py-2 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-200 focus:outline-none focus:border-indigo-500 transition font-mono">
+            <select id="reg-domain" class="px-2.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-indigo-400 font-medium focus:outline-none focus:border-indigo-500">
+              <option value="@pac.p">@pac.p</option>
+              <option value="@pacur.p">@pacur.p</option>
+            </select>
+          </div>
+          <p class="text-[10px] text-slate-400 mt-1">Tu correo será: <span id="reg-preview-email" class="text-indigo-400 font-mono">@pac.p</span></p>
+        </div>
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Contraseña (Cifrada con SHA-256)</label>
+          <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres" required minlength="6" class="w-full px-3.5 py-2 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-200 focus:outline-none focus:border-indigo-500 transition">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">Confirmar Contraseña</label>
+          <input type="password" id="reg-confirm-password" placeholder="Repite tu contraseña" required minlength="6" class="w-full px-3.5 py-2 rounded-xl bg-slate-800/90 border border-slate-700 text-slate-200 focus:outline-none focus:border-indigo-500 transition">
+        </div>
+        <div id="reg-error-msg" class="hidden text-[11px] text-rose-400 bg-rose-500/10 border border-rose-500/20 p-2 rounded-lg"></div>
+        <button type="submit" class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-lg shadow-indigo-600/30 transition">
+          Crear Cuenta Pmail
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL DE INTEGRACIÓN Y RESPALDO CON GITHUB (GISTS / REPOSITORIO) -->
+  <div id="github-modal" class="hidden fixed inset-0 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div class="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-6 text-xs space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+          <i data-lucide="github" class="w-4 h-4 text-indigo-400"></i> Respaldo en la Nube con GitHub
+        </h3>
+        <button id="btn-close-github" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+
+      <p class="text-slate-400 leading-relaxed">
+        Vincula tu cuenta mediante un <strong>Personal Access Token (PAT)</strong> de GitHub para respaldar tus contactos, borradores y correos en un <strong>Gist privado seguro</strong> accesible desde cualquier lugar.
+      </p>
+
+      <!-- Estado actual de la vinculación -->
+      <div id="github-account-card" class="hidden p-3 rounded-2xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <img id="github-avatar-img" src="" alt="Avatar" class="w-9 h-9 rounded-full border border-indigo-500/40">
+          <div>
+            <p id="github-user-name" class="font-semibold text-slate-200">GitHub User</p>
+            <a id="github-user-link" href="#" target="_blank" class="text-[11px] text-indigo-400 hover:underline">Ver perfil en GitHub</a>
+          </div>
+        </div>
+        <button id="btn-unlink-github" class="px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-[11px]">
+          Desvincular
+        </button>
+      </div>
+
+      <!-- Formulario para ingresar / actualizar Token -->
+      <div class="space-y-2">
+        <label class="block text-slate-300 font-medium">GitHub Personal Access Token (PAT):</label>
+        <div class="flex gap-2">
+          <input type="password" id="github-token-input" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" class="flex-1 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 font-mono text-xs focus:outline-none focus:border-indigo-500">
+          <button id="btn-save-github-token" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium">
+            Vincular
+          </button>
+        </div>
+        <p class="text-[10px] text-slate-500">
+          ¿No tienes un token? <a href="https://github.com/settings/tokens/new?scopes=gist,repo&description=Pmail%20Cloud%20Sync" target="_blank" class="text-indigo-400 underline">Crea uno aquí con permiso "gist"</a>.
+        </p>
+      </div>
+
+      <!-- Acciones de Sincronización -->
+      <div class="pt-3 border-t border-slate-800 flex flex-col sm:flex-row gap-2">
+        <button id="btn-sync-now-github" class="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition">
+          <i data-lucide="upload-cloud" class="w-4 h-4"></i> Respaldar a GitHub Ahora
+        </button>
+        <button id="btn-restore-github" class="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium flex items-center justify-center gap-2 border border-slate-700 transition">
+          <i data-lucide="download-cloud" class="w-4 h-4"></i> Restaurar Respaldo
+        </button>
+      </div>
+
+      <div id="github-sync-status-msg" class="text-[11px] text-center text-slate-400"></div>
+    </div>
+  </div>
+
   <!-- MODAL DE CONFIGURACIÓN DE CONEXIÓN LAN CON APP DE PC -->
-  <div id="lan-modal" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-50">
+  <div id="lan-modal" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
     <div class="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-5 space-y-4 text-xs">
       <div class="flex items-center justify-between">
         <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
@@ -358,7 +530,7 @@
   </div>
 
   <!-- MODAL PARA IMPORTAR RESPALDO .PMAILPKG -->
-  <div id="import-modal" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-50">
+  <div id="import-modal" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
     <div class="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-5 space-y-4 text-xs">
       <div class="flex items-center justify-between">
         <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
@@ -366,14 +538,14 @@
         </h3>
         <button id="btn-close-import" class="text-slate-400 hover:text-white"><i data-lucide="x" class="w-4 h-4"></i></button>
       </div>
-      <p class="text-slate-400">Selecciona un archivo <code>.pmailpkg</code> o <code>.json</code> exportado desde Google Drive o TeraBox.</p>
+      <p class="text-slate-400">Selecciona un archivo <code>.pmailpkg</code> o <code>.json</code> exportado desde Google Drive, TeraBox o GitHub.</p>
       <input type="file" id="input-backup-file" accept=".pmailpkg,.json" class="w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500">
       <div id="import-result-status" class="text-[11px] text-indigo-400"></div>
     </div>
   </div>
 
   <!-- PALETA DE COMANDOS -->
-  <div id="command-modal" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-start justify-center pt-24 z-50">
+  <div id="command-modal" class="hidden fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-start justify-center pt-24 z-50 p-4">
     <div class="w-full max-w-xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden text-xs">
       <div class="flex items-center px-4 py-3 border-b border-slate-800">
         <i data-lucide="search" class="w-4 h-4 text-slate-400 mr-2.5"></i>
@@ -383,6 +555,9 @@
       <div class="p-2 space-y-1">
         <button class="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-indigo-600/20 text-slate-300 hover:text-indigo-300 text-left" id="cmd-compose">
           <span>Redactar nuevo correo</span> <kbd class="font-mono text-[10px]">C</kbd>
+        </button>
+        <button class="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-indigo-600/20 text-slate-300 hover:text-indigo-300 text-left" id="cmd-github">
+          <span>Respaldar en GitHub Cloud</span>
         </button>
         <button class="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-indigo-600/20 text-slate-300 hover:text-indigo-300 text-left" id="cmd-lan">
           <span>Ajustes de Sincronización LAN</span>
@@ -395,6 +570,8 @@
   <script src="./js/db.js"></script>
   <script src="./js/backupReader.js"></script>
   <script src="./js/lanConnector.js"></script>
+  <script src="./js/auth.js"></script>
+  <script src="./js/githubSync.js"></script>
   <script src="./js/app.js"></script>
 </body>
 </html>
